@@ -1,7 +1,5 @@
 import pytest
 
-from notion.block import NotionBlock
-from notion.block import NotionBlockList
 from notion.page import NotionPage
 
 pytestmark = [pytest.mark.django_db]
@@ -14,16 +12,6 @@ def api(api):
     api.user.save()
 
     return api
-
-
-@pytest.fixture
-def course(mixer):
-    return mixer.blend("products.Course")
-
-
-@pytest.fixture
-def another_course(mixer):
-    return mixer.blend("products.Course")
 
 
 @pytest.fixture(autouse=True)
@@ -53,22 +41,10 @@ def material(mixer, course):
 
 
 @pytest.fixture
-def page() -> NotionPage:
-    return NotionPage(
-        blocks=NotionBlockList(
-            [
-                NotionBlock(id="block-1", data={"role": "reader-1", "value": {"last_edited_time": 1642356660000}}),
-                NotionBlock(id="block-2", data={"role": "reader-2"}),
-            ]
-        )
-    )
-
-
-@pytest.fixture
 def mock_notion_response(mocker, page: NotionPage):
     return mocker.patch("notion.client.NotionClient.fetch_page_recursively", return_value=page)
 
 
 @pytest.fixture
 def _disable_notion_cache(mocker):
-    mocker.patch("notion.cache.cache_disabled", return_value=True)
+    mocker.patch("notion.cache.should_bypass_cache", return_value=True)

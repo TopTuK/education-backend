@@ -1,4 +1,4 @@
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext as _
 
 from app.admin import admin
 from app.admin import ModelAdmin
@@ -41,7 +41,6 @@ class CourseAdmin(ModelAdmin):
             {
                 "fields": [
                     "welcome_letter_template_id",
-                    "gift_welcome_letter_template_id",
                     "diploma_template_context",
                 ],
             },

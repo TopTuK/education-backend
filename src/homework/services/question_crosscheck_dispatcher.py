@@ -1,5 +1,8 @@
+from dataclasses import dataclass
+
 from django.db.models import QuerySet
 
+from app.services import BaseService
 from homework.models import Answer
 from homework.models import AnswerCrossCheck
 from homework.models import Question
@@ -8,18 +11,20 @@ from mailing.tasks import send_mail
 from users.models import User
 
 
-class QuestionCrossCheckDispatcher:
-    def __init__(self, question: Question, answers_per_user: int = 3):
-        self.question = question
+@dataclass
+class QuestionCrossCheckDispatcher(BaseService):
+    question: Question
+    answers_per_user: int = 3
 
+    def __post_init__(self) -> None:
         self.dispatcher = AnswerCrossCheckDispatcher(
             answers=self.get_answers_to_check(),
-            answers_per_user=answers_per_user,
+            answers_per_user=self.answers_per_user,
         )
 
         self.checks: list[AnswerCrossCheck] = list()
 
-    def __call__(self) -> int:
+    def act(self) -> int:
         self.dispatch_crosschecks()
         self.notify_users()
 
@@ -45,12 +50,16 @@ class QuestionCrossCheckDispatcher:
         return [check for check in self.checks if check.checker == user]
 
     def get_answers_to_check(self) -> QuerySet[Answer]:
-        return self.question.answer_set.root_only().exclude(
-            do_not_crosscheck=True,
+        return (
+            Answer.objects.filter(question=self.question)
+            .root_only()
+            .exclude(
+                do_not_crosscheck=True,
+            )
         )
 
     @staticmethod
-    def get_notification_context(checks: list[AnswerCrossCheck]):
+    def get_notification_context(checks: list[AnswerCrossCheck]) -> dict:
         answers = list()
 
         for check in checks:

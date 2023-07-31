@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from functools import partial
 
+from app.services import BaseService
 from chains import tasks
 from chains.models import Message
 from chains.models import Progress
@@ -9,14 +10,16 @@ from studying.models import Study
 
 
 @dataclass
-class MessageSender:
+class MessageSender(BaseService):
     message: Message
     study: Study
 
-    def __call__(self) -> bool:
+    def act(self) -> bool:
         if not self.is_sent():
             self.send()
             return True
+
+        return False
 
     def send(self) -> None:
         log_progress = partial(tasks.log_chain_progress.si, message_id=self.message.pk, study_id=self.study.pk)

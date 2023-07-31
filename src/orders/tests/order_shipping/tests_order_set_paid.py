@@ -8,6 +8,11 @@ pytestmark = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def rebuild_tags(mocker):
+    return mocker.patch("users.tasks.rebuild_tags.delay")
+
+
 def test_works(order):
     assert order.paid is None
 
@@ -24,29 +29,18 @@ def test_ships(order, course, user, ship):
     ship.assert_called_once_with(course, to=user, order=order)
 
 
+def test_update_user_tags(order, rebuild_tags):
+    order.set_paid()
+
+    rebuild_tags.assert_called_once_with(order.user.id)
+
+
 def test_not_ships_if_order_is_already_paid(order, ship):
     order.setattr_and_save("paid", datetime(2032, 12, 1, 15, 30, tzinfo=timezone.utc))
 
     order.set_paid()
 
     ship.assert_not_called()
-
-
-def test_not_ships_if_order_has_desired_shipment_date(order, ship):
-    order.setattr_and_save("desired_shipment_date", datetime(2039, 12, 12, 15, 30, tzinfo=timezone.utc))
-
-    order.set_paid()
-
-    ship.assert_not_called()
-
-
-def test_orders_with_desired_shipment_date_do_not_have_shipment_date_set(order, ship):
-    order.setattr_and_save("desired_shipment_date", datetime(2039, 12, 12, 15, 30, tzinfo=timezone.utc))
-
-    order.set_paid()
-    order.refresh_from_db()
-
-    assert order.shipped is None
 
 
 def test_shipment_date(order):
@@ -65,7 +59,7 @@ def test_order_is_not_shipped_again_if_already_shipped(order, ship):
     ship.assert_not_called()
 
 
-def test_shippment_date_is_not_reset(order, ship):
+def test_shipment_date_is_not_reset(order, ship):
     order.shipped = datetime(2000, 11, 12, 1, 13, tzinfo=timezone.utc)
     order.save()
 

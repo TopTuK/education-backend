@@ -4,8 +4,8 @@ pytestmark = [pytest.mark.django_db]
 
 
 @pytest.fixture(autouse=True)
-def course(mixer):
-    return mixer.blend("products.Course", slug="ruloning-oboev", price=1900)
+def course(factory):
+    return factory.course(slug="ruloning-oboev", price=1900)
 
 
 @pytest.fixture
@@ -13,17 +13,6 @@ def default_user_data():
     return {
         "name": "Забой Шахтёров",
         "email": "zaboy@gmail.com",
-    }
-
-
-@pytest.fixture
-def default_gift_data():
-    return {
-        "receiver_name": "Забой Шахтёров",
-        "receiver_email": "zaboy@gmail.com",
-        "giver_name": "Камаз Помоев",
-        "giver_email": "kamaz@gmail.com",
-        "desired_shipment_date": "2032-12-01 12:35:15",
     }
 
 

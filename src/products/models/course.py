@@ -52,9 +52,6 @@ class Course(Shippable):
     welcome_letter_template_id = models.CharField(
         _("Welcome letter template id"), max_length=255, blank=True, null=True, help_text=_("Will be sent upon purchase if set")
     )
-    gift_welcome_letter_template_id = models.CharField(
-        _("Special welcome letter template id for gifts"), max_length=255, blank=True, null=True, help_text=_("If not set, common welcome letter will be used")
-    )
     display_in_lms = models.BooleanField(_("Display in LMS"), default=True, help_text=_("If disabled will not be shown in LMS"))
 
     diploma_template_context = models.JSONField(default=dict, blank=True)
@@ -83,7 +80,7 @@ class Course(Shippable):
         verbose_name_plural = _("Courses")
         db_table = "courses_course"
 
-    def clean(self):
+    def clean(self) -> None:
         """Check for correct setting of confirmation_template_id and confirmation_success_url"""
         if not self.confirmation_template_id and not self.confirmation_success_url:
             return
@@ -99,7 +96,7 @@ class Course(Shippable):
             pk__in=apps.get_model("studying.Study").objects.filter(course=self).values_list("student", flat=True),
         )
 
-    def send_email_to_all_purchased_users(self, template_id: str):
+    def send_email_to_all_purchased_users(self, template_id: str) -> None:
         for user in self.get_purchased_users().iterator():
             send_mail.delay(
                 to=user.email,

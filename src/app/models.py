@@ -2,9 +2,9 @@ import contextlib
 from copy import copy
 from functools import reduce
 import operator
-from typing import Optional
+from typing import Any, Type
 
-from behaviors.behaviors import Timestamped  # type: ignore
+from behaviors.behaviors import Timestamped
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -21,12 +21,19 @@ class DefaultModel(models.Model):
     class Meta:
         abstract = True
 
+    def __str__(self) -> str:
+        name = getattr(self, "name", None)
+        if name is not None:
+            return str(name)
+
+        return super().__str__()
+
     @classmethod
     def get_contenttype(cls) -> ContentType:
         return ContentType.objects.get_for_model(cls)
 
     @classmethod
-    def has_field(cls, field) -> bool:
+    def has_field(cls, field: str) -> bool:
         """
         Shortcut to check if model has particular field
         """
@@ -36,19 +43,19 @@ class DefaultModel(models.Model):
         except models.FieldDoesNotExist:
             return False
 
-    def update_from_kwargs(self, **kwargs):
+    def update_from_kwargs(self, **kwargs: dict[str, Any]) -> None:
         """
         A shortcut method to update model instance from the kwargs.
         """
-        for (key, value) in kwargs.items():
+        for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def setattr_and_save(self, key, value):
+    def setattr_and_save(self, key: str, value: Any) -> None:
         """Shortcut for testing -- set attribute of the model and save"""
         setattr(self, key, value)
         self.save()
 
-    def copy(self, **kwargs):
+    def copy(self, **kwargs: Any) -> "DefaultModel":
         """Creates new object from current."""
         instance = copy(self)
         kwargs.update(
@@ -68,7 +75,7 @@ class DefaultModel(models.Model):
         return cls._meta.label_lower.split(".")[-1]
 
     @classmethod
-    def get_foreignkey(cls, Model) -> Optional[str]:
+    def get_foreignkey(cls, Model: Type[models.Model]) -> str | None:
         """Given an model, returns the ForeignKey to it"""
         for field in cls._meta.get_fields():
             if isinstance(field, models.fields.related.ForeignKey):
@@ -84,13 +91,6 @@ class DefaultModel(models.Model):
 
     def _get_cached_property_names(self) -> list[str]:
         return [func_name for func_name in dir(self.__class__) if type(getattr(self.__class__, func_name)) is cached_property]
-
-    def __str__(self) -> str:
-        name = getattr(self, "name", None)
-        if name is not None:
-            return str(name)
-
-        return super().__str__()
 
 
 class TimestampedModel(DefaultModel, Timestamped):

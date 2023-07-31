@@ -1,6 +1,11 @@
-from typing import Any, Dict, Protocol, Type
+from typing import Any, Protocol, Type
 
+from rest_framework.mixins import CreateModelMixin
+from rest_framework.mixins import DestroyModelMixin
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.serializers import Serializer
+from rest_framework.viewsets import GenericViewSet
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.viewsets import ReadOnlyModelViewSet as _ReadOnlyModelViewSet
 
@@ -11,6 +16,7 @@ from app.validators import Validator
 __all__ = [
     "AppViewSet",
     "ReadOnlyAppViewSet",
+    "CreateDeleteAppViewSet",
 ]
 
 
@@ -25,11 +31,11 @@ class ValidationMixin(ViewsetWithValidationProtocol):
 
         return self.validator_class
 
-    def _validate(self, data, context: dict | None = None):
+    def _validate(self, data: dict, context: dict | None = None) -> None:
         Validator = self.get_validator_class()
         Validator.do(data, context=self.get_validator_context())
 
-    def get_validator_context(self) -> Dict[str, Any]:
+    def get_validator_context(self) -> dict[str, Any]:
         return {
             "request": self.request,  # type: ignore
         }
@@ -73,7 +79,7 @@ class ReadOnlyAppViewSet(MultiSerializerMixin, _ReadOnlyModelViewSet):
 
 
 class AppViewSet(MultiSerializerMixin, ModelViewSet):
-    def update(self, request, *args, **kwargs):
+    def update(self, request: Request, *args: Any, **kwargs: dict[str, Any]) -> Response:
         """
         Always serialize response with the default serializer.
 
@@ -88,7 +94,7 @@ class AppViewSet(MultiSerializerMixin, ModelViewSet):
 
         return response
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: dict[str, Any]) -> Response:
         """
         Always serialize response with the default serializer.
 
@@ -109,3 +115,7 @@ class AppViewSet(MultiSerializerMixin, ModelViewSet):
         response.data = Serializer(self.get_object()).data
 
         return response
+
+
+class CreateDeleteAppViewSet(MultiSerializerMixin, CreateModelMixin, DestroyModelMixin, GenericViewSet):
+    ...

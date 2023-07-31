@@ -1,6 +1,6 @@
 import contextlib
 from decimal import Decimal
-from typing import Optional
+from typing import Optional  # NOQA: I251
 
 from django.core.exceptions import ValidationError
 from django.db.models import Case
@@ -19,7 +19,9 @@ from products.models import Course
 
 class PromoCodeQuerySet(QuerySet):
     def active(self) -> QuerySet["PromoCode"]:
-        return self.filter(active=True,).filter(
+        return self.filter(
+            active=True,
+        ).filter(
             Q(expires__isnull=True) | Q(expires__gte=timezone.now()),
         )
 

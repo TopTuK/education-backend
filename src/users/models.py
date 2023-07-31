@@ -1,10 +1,12 @@
-from typing import cast, Optional
+from typing import cast
 from urllib.parse import urljoin
 import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import Permission
+from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import GinIndex
 from django.db.models import TextChoices
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
@@ -30,8 +32,21 @@ class User(AbstractUser):
     github_username = models.CharField(max_length=256, blank=True, db_index=True, default="")
     telegram_username = models.CharField(max_length=256, blank=True, db_index=True, default="")
 
+    tags = ArrayField(models.CharField(max_length=512), default=list)
+
     class Meta(AbstractUser.Meta):
         abstract = False
+        indexes = [GinIndex(fields=["tags"])]
+        verbose_name = _("user")
+        verbose_name_plural = _("users")
+
+    def __str__(self) -> str:
+        name = f"{self.first_name} {self.last_name}"
+
+        if len(name) < 3:
+            return "Anonymous"
+
+        return name.strip()
 
     @classmethod
     def parse_name(cls, name: str) -> dict:
@@ -45,20 +60,12 @@ class User(AbstractUser):
 
         return {"first_name": parts[0], "last_name": " ".join(parts[1:])}
 
-    def __str__(self) -> str:
-        name = f"{self.first_name} {self.last_name}"
-
-        if len(name) < 3:
-            return "Anonymous"
-
-        return name.strip()
-
     @cached_property
     def diploma_languages(self) -> set[Language]:
         language_values = [cast(Language, language) for language in Languages.values]
         return {language for language in language_values if self.get_printable_name(language) is not None}
 
-    def get_printable_name(self, language: Language) -> Optional[str]:
+    def get_printable_name(self, language: Language) -> str | None:
         if language.lower() == "ru":
             name = f"{self.first_name} {self.last_name}"
         else:
@@ -75,7 +82,7 @@ class User(AbstractUser):
 
         return "male"  # sorry, flex scope
 
-    def add_perm(self, perm):
+    def add_perm(self, perm: str) -> None:
         """Add permission to the user.
         This is a shortcut method for testing, please do not use in production
         """
@@ -93,6 +100,9 @@ class Student(User):
         proxy = True
         verbose_name = _("Student")
         verbose_name_plural = _("Students")
+
+    def __str__(self) -> str:
+        return super().__str__()
 
     def get_absolute_url(self) -> str:
         return urljoin(settings.FRONTEND_URL, f"/auth/as/{self.pk}/")

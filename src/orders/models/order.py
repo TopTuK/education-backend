@@ -1,34 +1,26 @@
-from typing import Iterable, Optional
+from typing import Iterable
 
 import shortuuid
 
 from django.db.models import CheckConstraint
 from django.db.models import QuerySet
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 
 from app.models import models
 from app.models import only_one_or_zero_is_set
 from app.models import TimestampedModel
+from orders.exceptions import UnknownItemException
 from orders.fields import ItemField
 from products.models import Product
 
 
-class UnknownItemException(Exception):
-    pass
-
-
 class OrderQuerySet(QuerySet):
-    def paid(self, invert: Optional[bool] = False) -> QuerySet["Order"]:
+    def paid(self, invert: bool | None = False) -> QuerySet["Order"]:
         return self.filter(paid__isnull=invert)
 
     def shipped_without_payment(self) -> QuerySet["Order"]:
         return self.paid(invert=True).filter(shipped__isnull=False)
-
-    def to_ship(self) -> QuerySet["Order"]:
-        """Paid orders that may be shipped right now"""
-        return self.paid().filter(shipped__isnull=True, desired_shipment_date__lte=timezone.now())
 
     def available_to_confirm(self) -> QuerySet["Order"]:
         return self.filter(
@@ -62,14 +54,9 @@ class Order(TimestampedModel):
     ue_rate = models.IntegerField(_("Purchase-time UE rate"))
     acquiring_percent = models.DecimalField(default=0, max_digits=4, decimal_places=2)
 
-    course = ItemField(to="products.Course", verbose_name=_("Course"), null=True, blank=True, on_delete=models.PROTECT)  # type: ignore
-    record = ItemField(to="products.Record", verbose_name=_("Record"), null=True, blank=True, on_delete=models.PROTECT)  # type: ignore
-    bundle = ItemField(to="products.Bundle", verbose_name=_("Bundle"), null=True, blank=True, on_delete=models.PROTECT)  # type: ignore
-
-    giver = models.ForeignKey("users.User", verbose_name=_("Giver"), null=True, blank=True, on_delete=models.SET_NULL, related_name="created_gifts")
-    desired_shipment_date = models.DateTimeField(_("Date when the gift should be shipped"), null=True, blank=True)
-    gift_message = models.TextField(_("Gift message"), default="", blank=True)
-    notification_to_giver_is_sent = models.BooleanField(default=False)
+    course = ItemField(to="products.Course", verbose_name=_("Course"), null=True, blank=True, on_delete=models.PROTECT)
+    record = ItemField(to="products.Record", verbose_name=_("Record"), null=True, blank=True, on_delete=models.PROTECT)
+    bundle = ItemField(to="products.Bundle", verbose_name=_("Bundle"), null=True, blank=True, on_delete=models.PROTECT)
 
     class Meta:
         ordering = ["-id"]
@@ -92,7 +79,7 @@ class Order(TimestampedModel):
         return f"Order #{self.pk}"
 
     @property
-    def item(self):
+    def item(self) -> Product:  # type: ignore
         """Find the attached item. Simple replacement for ContentType framework"""
         for field in self.__class__._meta.get_fields():
             if getattr(field, "_is_item", False):
@@ -106,7 +93,7 @@ class Order(TimestampedModel):
                 yield field  # type: ignore
 
     @classmethod
-    def get_item_foreignkey(cls, item: Product) -> Optional[str]:
+    def get_item_foreignkey(cls, item: Product) -> str | None:
         """
         Given an item model, returns the ForeignKey to it"""
         for field in cls._iterate_items():
@@ -129,7 +116,7 @@ class Order(TimestampedModel):
 
         raise UnknownItemException(f"There is no foreignKey for {item.__class__}")
 
-    def set_paid(self, silent: Optional[bool] = False) -> None:
+    def set_paid(self, silent: bool | None = False) -> None:
         from orders.services import OrderPaidSetter
 
         OrderPaidSetter(self, silent=silent)()
@@ -139,7 +126,7 @@ class Order(TimestampedModel):
 
         OrderUnpaidSetter(self)()
 
-    def ship(self, silent: Optional[bool] = False) -> None:
+    def ship(self, silent: bool | None = False) -> None:
         from orders.services import OrderShipper
 
         OrderShipper(self, silent=silent)()
@@ -151,7 +138,7 @@ class Order(TimestampedModel):
 
         return False
 
-    def unship(self):
+    def unship(self) -> None:
         from orders.services import OrderUnshipper
 
         OrderUnshipper(self)()

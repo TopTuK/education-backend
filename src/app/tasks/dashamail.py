@@ -1,10 +1,10 @@
-from typing import Optional
-
 import httpx
 
+from django.apps import apps
+
 from app.celery import celery
-from app.integrations.dashamail import AppDashamail
 from app.integrations.dashamail import DashamailException
+from app.integrations.dashamail.subscription_updater import SubscriptionUpdater
 
 
 @celery.task(
@@ -14,14 +14,9 @@ from app.integrations.dashamail import DashamailException
         "countdown": 5,
     },
     rate_limit="1/s",
+    name="dashamail.update_subscription",
 )
-def subscribe_to_dashamail(list_id: str, email: str, first_name: str, last_name: str, tags: Optional[list[str]]):
-    dashamail = AppDashamail()
+def update_dashamail_subscription(user_id: int) -> None:
+    user = apps.get_model("users.User").objects.get(pk=user_id)
 
-    dashamail.subscribe_user(
-        list_id=list_id,
-        email=email,
-        first_name=first_name,
-        last_name=last_name,
-        tags=tags,
-    )
+    SubscriptionUpdater(user)()

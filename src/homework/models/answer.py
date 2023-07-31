@@ -1,5 +1,6 @@
 import textwrap
 from urllib.parse import urljoin
+from urllib.parse import urlparse
 import uuid
 
 from tree_queries.models import TreeNode
@@ -7,6 +8,7 @@ from tree_queries.query import TreeQuerySet
 
 from django.conf import settings
 from django.db.models import Count
+from django.db.models import Prefetch
 from django.db.models import Q
 from django.db.models.query_utils import FilteredRelation
 from django.utils.translation import gettext_lazy as _
@@ -14,6 +16,7 @@ from django.utils.translation import gettext_lazy as _
 from app.markdown import markdownify
 from app.markdown import remove_html
 from app.models import models
+from homework.models.reaction import Reaction
 from orders.models import Order
 from products.models import Course
 from users.models import User
@@ -23,7 +26,14 @@ class AnswerQuerySet(TreeQuerySet):
     def for_viewset(self) -> "AnswerQuerySet":
         return self.with_tree_fields().select_related("author", "question")
 
-    def accessed_by(self, user) -> "AnswerQuerySet":
+    def prefetch_reactions(self) -> "AnswerQuerySet":
+        """
+        Must be called after all other queryset methods if needed with allowed_for_user method
+        due to iterator() usage in allowed_for_user
+        """
+        return self.prefetch_related(Prefetch("reactions", queryset=Reaction.objects.for_viewset()))
+
+    def accessed_by(self, user: User) -> "AnswerQuerySet":
         return (
             self.with_tree_fields()
             .annotate(
@@ -66,14 +76,14 @@ class AnswerQuerySet(TreeQuerySet):
 
 
 class Answer(TreeNode):
-    objects = models.Manager.from_queryset(AnswerQuerySet)()
+    objects = AnswerQuerySet.as_manager()
 
     created = models.DateTimeField(auto_now_add=True, db_index=True)
     modified = models.DateTimeField(auto_now=True, db_index=True)
 
     slug = models.UUIDField(db_index=True, unique=True, default=uuid.uuid4)
-    question = models.ForeignKey("homework.Question", on_delete=models.CASCADE)
-    author = models.ForeignKey("users.User", on_delete=models.CASCADE)
+    question = models.ForeignKey("homework.Question", on_delete=models.CASCADE, related_name="+")
+    author = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="+")
     do_not_crosscheck = models.BooleanField(_("Exclude from cross-checking"), default=False)
 
     text = models.TextField()
@@ -86,12 +96,14 @@ class Answer(TreeNode):
             ("see_all_answers", _("May see answers from every user")),
         ]
 
-    def get_root_answer(self) -> "Answer":
-        ancesorts = self.ancestors()
-        if ancesorts.count():
-            return ancesorts[0]
+    def __str__(self) -> str:
+        text = remove_html(markdownify(self.text))
+        first_word = text.split()[0]
+        resource = urlparse(first_word).netloc
+        if resource:
+            return f'Ссылка на {resource.split(".")[-2]}'
 
-        return self
+        return textwrap.shorten(text, width=40)
 
     def get_absolute_url(self) -> str:
         root = self.get_root_answer()
@@ -103,6 +115,13 @@ class Answer(TreeNode):
 
         return url
 
+    def get_root_answer(self) -> "Answer":
+        ancesorts = self.ancestors()
+        if ancesorts.count():
+            return ancesorts[0]
+
+        return self
+
     def get_purchased_course(self) -> Course | None:
         latest_purchase = Order.objects.paid().filter(user=self.author, course__in=self.question.courses.all()).order_by("-paid").first()
 
@@ -113,7 +132,3 @@ class Answer(TreeNode):
 
     def get_first_level_descendants(self) -> "AnswerQuerySet":
         return self.descendants().filter(parent=self.id)
-
-    def __str__(self) -> str:
-        text = remove_html(markdownify(self.text))
-        return textwrap.shorten(text, width=40)

@@ -13,11 +13,6 @@ def api(api):
 
 
 @pytest.fixture
-def course(mixer):
-    return mixer.blend("products.Course")
-
-
-@pytest.fixture
 def question(mixer, course):
     question = mixer.blend("homework.Question")
     question.courses.add(course)
@@ -44,6 +39,11 @@ def another_answer(mixer, question, api):
 
 
 @pytest.fixture
+def child_answer(answer, mixer):
+    return mixer.blend("homework.Answer", parent=answer)
+
+
+@pytest.fixture
 def purchase(factory, course, api):
     order = factory.order(user=api.user, item=course)
     order.set_paid()
@@ -55,3 +55,13 @@ def purchase(factory, course, api):
 def _no_purchase(purchase):
     """Invalidate the purchase"""
     purchase.setattr_and_save("paid", None)
+
+
+@pytest.fixture
+def emoji():
+    return "🐍"
+
+
+@pytest.fixture
+def reaction(mixer, answer, api, emoji):
+    return mixer.blend("homework.Reaction", answer=answer, author=api.user, emoji=emoji)

@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from django.apps import apps
 from django.utils.translation import gettext_lazy as _
@@ -29,7 +29,7 @@ class Shippable(TimestampedModel):
     )
     name_international = models.CharField(_("Name used for international purchases"), max_length=255, blank=True, default="")
 
-    slug = models.SlugField()
+    slug = models.SlugField(unique=True)
 
     price = models.DecimalField(max_digits=8, decimal_places=2)
     old_price = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
@@ -43,30 +43,30 @@ class Shippable(TimestampedModel):
     class Meta:
         abstract = True
 
-    def get_price_display(self):
+    def get_price_display(self) -> str:
         return format_price(self.price)
 
-    def get_old_price_display(self):
+    def get_old_price_display(self) -> str:
         return format_price(self.old_price)
 
-    def get_formatted_price_display(self):
+    def get_formatted_price_display(self) -> str:
         return format_old_price(self.old_price, self.price)
 
-    def ship(self, to: User, order: "Order"):
+    def ship(self, to: User, order: "Order") -> None:
         return ShipmentFactory.ship(self, to=to, order=order)
 
-    def unship(self, order: "Order"):
+    def unship(self, order: "Order") -> None:
         return ShipmentFactory.unship(order=order)
 
-    def get_price(self, promocode=None) -> Decimal:
-        promocode = apps.get_model("orders.PromoCode").objects.get_or_nothing(name=promocode)
+    def get_price(self, promocode: str | None = None) -> Decimal:
+        promocode_obj = apps.get_model("orders.PromoCode").objects.get_or_nothing(name=promocode)
 
-        if promocode is not None:
-            return promocode.apply(self)
+        if promocode_obj is not None:
+            return promocode_obj.apply(self)
 
         return self.price
 
-    def get_template_id(self) -> Optional[str]:
+    def get_template_id(self) -> str | None:
         """Get custom per-item template_id"""
         if not hasattr(self, "template_id"):
             return None
