@@ -1,6 +1,7 @@
-import requests
+import httpx
 
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 from banking.base import Bank
 
@@ -10,7 +11,7 @@ class TinkoffCreditRequestException(Exception):
 
 
 class TinkoffCredit(Bank):
-    name = "Т.Кредит"
+    name = _("Tinkoff Credit")
 
     def get_initial_payment_url(self) -> str:
         result = self.call(
@@ -30,7 +31,7 @@ class TinkoffCredit(Bank):
 
     def call(self, url: str, payload: dict) -> dict:
         """Query TinkoffCredit API"""
-        response = requests.post(url, json=payload)
+        response = httpx.post(url, json=payload)
 
         if response.status_code != 200:
             errors = response.json()["errors"]

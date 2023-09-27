@@ -10,22 +10,26 @@ from django.utils.translation import pgettext_lazy
 from app.models import models
 from app.models import only_one_or_zero_is_set
 from app.models import TimestampedModel
+from banking.selector import BANK_CHOICES
 from orders.exceptions import UnknownItemException
 from orders.fields import ItemField
 from products.models import Product
 
 
 class OrderQuerySet(QuerySet):
-    def paid(self, invert: bool | None = False) -> QuerySet["Order"]:
+    def paid(self, invert: bool | None = False) -> "OrderQuerySet":
         return self.filter(paid__isnull=invert)
 
-    def shipped_without_payment(self) -> QuerySet["Order"]:
+    def shipped_without_payment(self) -> "OrderQuerySet":
         return self.paid(invert=True).filter(shipped__isnull=False)
 
-    def available_to_confirm(self) -> QuerySet["Order"]:
+    def available_to_confirm(self) -> "OrderQuerySet":
         return self.filter(
             price=0,
         )
+
+    def same_deal(self, order: "Order") -> "OrderQuerySet":
+        return self.filter(user=order.user, course=order.course).exclude(pk=order.pk)
 
 
 OrderManager = models.Manager.from_queryset(OrderQuerySet)
@@ -50,13 +54,16 @@ class Order(TimestampedModel):
     unpaid = models.DateTimeField(_("Date when order got unpaid"), null=True, blank=True)
     shipped = models.DateTimeField(_("Date when order was shipped"), null=True, blank=True)
 
-    bank_id = models.CharField(_("User-requested bank string"), blank=True, max_length=32)
+    bank_id = models.CharField(_("User-requested bank string"), choices=BANK_CHOICES, blank=True, max_length=32)
     ue_rate = models.IntegerField(_("Purchase-time UE rate"))
     acquiring_percent = models.DecimalField(default=0, max_digits=4, decimal_places=2)
 
     course = ItemField(to="products.Course", verbose_name=_("Course"), null=True, blank=True, on_delete=models.PROTECT)
     record = ItemField(to="products.Record", verbose_name=_("Record"), null=True, blank=True, on_delete=models.PROTECT)
     bundle = ItemField(to="products.Bundle", verbose_name=_("Bundle"), null=True, blank=True, on_delete=models.PROTECT)
+
+    amocrm_lead = models.OneToOneField("amocrm.AmoCRMOrderLead", on_delete=models.SET_NULL, null=True, blank=True, related_name="order")
+    amocrm_transaction = models.OneToOneField("amocrm.AmoCRMOrderTransaction", on_delete=models.SET_NULL, null=True, blank=True, related_name="order")
 
     class Meta:
         ordering = ["-id"]
@@ -77,6 +84,10 @@ class Order(TimestampedModel):
 
     def __str__(self) -> str:
         return f"Order #{self.pk}"
+
+    @property
+    def is_b2b(self) -> bool:
+        return self.author_id != self.user_id
 
     @property
     def item(self) -> Product:  # type: ignore
@@ -121,10 +132,10 @@ class Order(TimestampedModel):
 
         OrderPaidSetter(self, silent=silent)()
 
-    def set_not_paid(self) -> None:
-        from orders.services import OrderUnpaidSetter
+    def refund(self) -> None:
+        from orders.services import OrderRefunder
 
-        OrderUnpaidSetter(self)()
+        OrderRefunder(self)()
 
     def ship(self, silent: bool | None = False) -> None:
         from orders.services import OrderShipper

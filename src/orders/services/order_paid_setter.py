@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 
+from celery import chain
+
 from django.utils import timezone
 
+from amocrm.tasks import amocrm_enabled
+from amocrm.tasks import push_order
+from amocrm.tasks import push_user
 from app.services import BaseService
-from banking.selector import get_bank
 from orders.models import Order
 from users.tasks import rebuild_tags
 
@@ -22,9 +26,8 @@ class OrderPaidSetter(BaseService):
 
     def act(self) -> None:
         self.mark_order_as_paid()
-        self.call_bank_successfull_callback()
         self.ship()
-        self.update_user_tags()
+        self.after_shipment()
 
     def mark_order_as_paid(self) -> None:
         self.order.paid = timezone.now()
@@ -37,11 +40,16 @@ class OrderPaidSetter(BaseService):
         if not self.is_already_shipped and not self.is_already_paid and self.order.item is not None:
             self.order.ship(silent=self.silent)
 
-    def call_bank_successfull_callback(self) -> None:
-        Bank = get_bank(self.order.bank_id)
-        bank = Bank(order=self.order)
-        bank.successful_payment_callback()
+    def after_shipment(self) -> None:
+        can_be_subscribed = bool(self.order.user.email and len(self.order.user.email))
 
-    def update_user_tags(self) -> None:
-        if self.order.user.email and len(self.order.user.email):
-            rebuild_tags.delay(self.order.user.id)
+        if not can_be_subscribed and not amocrm_enabled():
+            rebuild_tags.delay(student_id=self.order.user.id, subscribe=False)
+            return None
+
+        if amocrm_enabled():
+            chain(
+                rebuild_tags.si(student_id=self.order.user.id, subscribe=can_be_subscribed),
+                push_user.si(user_id=self.order.user.id),
+                push_order.si(order_id=self.order.id),
+            ).delay()

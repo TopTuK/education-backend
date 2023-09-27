@@ -22,12 +22,17 @@ celery.conf.update(
     task_ignore_result=True,
     task_store_errors_even_if_ignored=True,
     task_acks_late=True,
+    task_routes={"amocrm.tasks.*": {"queue": "amocrm"}},
     timezone=env("TIME_ZONE", cast=str, default="Europe/Moscow"),
     enable_utc=False,
     beat_schedule={
         "send_active_chains": {
             "task": "chains.tasks.send_active_chains",
             "schedule": crontab(hour="*", minute="*/5"),
+        },
+        "amocrm_push_all_products_and_product_groups": {
+            "task": "amocrm.tasks.push_all_products_and_product_groups",
+            "schedule": crontab(minute="15", hour="*/2"),
         },
     },
 )

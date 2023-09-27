@@ -4,9 +4,9 @@ from urllib.parse import urljoin
 import httpx
 
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 from banking.base import Bank
-from banking.tasks import print_atol_receipt
 
 
 class DolyameRequestException(Exception):
@@ -14,9 +14,14 @@ class DolyameRequestException(Exception):
 
 
 class Dolyame(Bank):
+    """Dolyame client.
+
+    There is no 'commit' method: it's not required cause 'autocommit' is enabled on the bank side.
+    """
+
     acquiring_percent = Decimal("6.9")
     base_url = "https://partner.dolyame.ru/v1/"
-    name = "Долями"
+    name = _("Dolyame")
     bank_id = "dolyame"
 
     def get_initial_payment_url(self) -> str:
@@ -28,6 +33,7 @@ class Dolyame(Bank):
                     "amount": self.price,
                     "items": self.get_items(),
                 },
+                "fiscalization_settings": {"type": "enabled"},
                 "client_info": self.get_client_info(),
                 "notification_url": self.get_notification_url(),
                 "success_url": self.success_url,
@@ -37,27 +43,15 @@ class Dolyame(Bank):
 
         return result["link"]
 
-    def commit(self) -> None:
-        self.post(
-            method=f"orders/{self.order.slug}/commit",
-            payload={
-                "amount": self.price,
-                "items": self.get_items(),
-            },
-        )
-
     def refund(self) -> None:
         self.post(
             method=f"orders/{self.order.slug}/refund",
             payload={
                 "amount": self.price,
                 "returned_items": self.get_items(),
+                "fiscalization_settings": {"type": "enabled"},
             },
         )
-
-    def successful_payment_callback(self) -> None:
-        """We have to manualy print reciepts for this payment method"""
-        print_atol_receipt.delay(order_id=self.order.pk)
 
     def post(self, method: str, payload: dict) -> dict:
         """Query Dolyame API"""
@@ -82,6 +76,12 @@ class Dolyame(Bank):
                 "name": self.order.item.name_receipt,
                 "price": self.price,
                 "quantity": 1,
+                "receipt": {
+                    "payment_method": "full_payment",
+                    "tax": "none",
+                    "payment_object": "service",
+                    "measurement_unit": "шт",
+                },
             },
         ]
 
