@@ -16,7 +16,7 @@ attrs==23.1.0
     # via
     #   jsonschema
     #   referencing
-babel==2.12.1
+babel==2.13.0
     # via education-backend (pyproject.toml)
 bcrypt==4.0.1
     # via education-backend (pyproject.toml)
@@ -39,11 +39,11 @@ certifi==2023.7.22
     #   httpx
     #   requests
     #   sentry-sdk
-cffi==1.15.1
+cffi==1.16.0
     # via
     #   cmarkgfm
     #   cryptography
-charset-normalizer==3.2.0
+charset-normalizer==3.3.0
     # via requests
 click==8.1.7
     # via
@@ -101,7 +101,7 @@ django-filter==23.3
     # via education-backend (pyproject.toml)
 django-healthchecks==1.5.0
     # via education-backend (pyproject.toml)
-django-ipware==5.0.0
+django-ipware==5.0.1
     # via
     #   drf-recaptcha
     #   education-backend (pyproject.toml)
@@ -109,7 +109,7 @@ django-prettyjson==0.4.1
     # via education-backend (pyproject.toml)
 django-split-settings==1.2.0
     # via education-backend (pyproject.toml)
-django-storages==1.14
+django-storages==1.14.1
     # via education-backend (pyproject.toml)
 django-tree-queries==0.15.0
     # via education-backend (pyproject.toml)
@@ -126,7 +126,7 @@ drf-recaptcha==3.0.0
     # via education-backend (pyproject.toml)
 drf-spectacular[sidecar]==0.26.5
     # via education-backend (pyproject.toml)
-drf-spectacular-sidecar==2023.9.1
+drf-spectacular-sidecar==2023.10.1
     # via drf-spectacular
 emoji==2.8.0
     # via education-backend (pyproject.toml)
@@ -163,7 +163,7 @@ pillow==10.0.1
     # via education-backend (pyproject.toml)
 prompt-toolkit==3.0.39
     # via click-repl
-psycopg2-binary==2.9.7
+psycopg2-binary==2.9.9
     # via education-backend (pyproject.toml)
 py==1.11.0
     # via retry
@@ -226,7 +226,7 @@ stripe==6.6.0
     # via education-backend (pyproject.toml)
 uritemplate==4.1.1
     # via drf-spectacular
-urllib3==1.26.16
+urllib3==1.26.17
     # via
     #   botocore
     #   django-anymail
@@ -238,7 +238,7 @@ vine==5.0.0
     #   amqp
     #   celery
     #   kombu
-wcwidth==0.2.6
+wcwidth==0.2.8
     # via prompt-toolkit
 webencodings==0.5.1
     # via bleach
