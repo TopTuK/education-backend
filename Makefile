@@ -1,33 +1,33 @@
-install-dev-deps: dev-deps
-	pip-sync requirements.txt dev-requirements.txt
+manage = poetry run python src/manage.py
+SIMULTANEOUS_TEST_JOBS=4
 
-install-deps: deps
-	pip-sync requirements.txt
-
-deps:
-	pip install --upgrade pip pip-tools
-	pip-compile --output-file requirements.txt --resolver=backtracking pyproject.toml
-
-dev-deps: deps
-	pip-compile --extra=dev --output-file dev-requirements.txt --resolver=backtracking pyproject.toml
-
-server:
-	cd src && ./manage.py migrate && ./manage.py runserver
-
-worker:
-	cd src && celery -A app worker -E --purge
+compilemessages:
+	$(manage) compilemessages
 
 fmt:
-	cd src && autoflake --in-place --remove-all-unused-imports --recursive .
-	cd src && isort .
-	cd src && black .
+	poetry run autoflake --in-place --remove-all-unused-imports --recursive src
+	poetry run isort src
+	poetry run black src
 
 lint:
-	cd src && ./manage.py makemigrations --check --no-input --dry-run
-	flake8 src
-	cd src && mypy
+	$(manage) makemigrations --check --no-input --dry-run
+	poetry run flake8 src
+	poetry run mypy src
+	poetry run pymarkdown scan README.md
+
+messages: compilemessages
+	$(manage) makemessages --locale ru
+
+server: compilemessages
+	$(manage) collectstatic --no-input
+
+	$(manage) migrate
+	$(manage) runserver
 
 test:
-	cd src && pytest -n 4 --ff -x --create-db --cov-report=xml --cov=. -m 'not single_thread'
-	cd src && pytest --ff -x --cov-report=xml --cov=. --cov-append -m 'single_thread'
-	cd src && pytest --dead-fixtures
+	poetry run pytest -n ${SIMULTANEOUS_TEST_JOBS} --create-db --cov-report=xml --cov=. --junit-xml=junit-multithread.xml -m 'not single_thread'
+	poetry run pytest --cov-report=xml --cov=. --cov-append --junit-xml=junit-singlethread.xml -m 'single_thread'
+	poetry run pytest --dead-fixtures
+
+worker:
+	poetry run celery --app core --workdir src worker --events --purge
