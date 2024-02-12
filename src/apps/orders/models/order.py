@@ -49,7 +49,6 @@ class Order(TimestampedModel):
         _("Date when order got paid"),
         null=True,
         blank=True,
-        help_text=_("If set during creation, order automaticaly gets shipped"),
     )
     unpaid = models.DateTimeField(_("Date when order got unpaid"), null=True, blank=True)
     shipped = models.DateTimeField(_("Date when order was shipped"), null=True, blank=True)
@@ -64,6 +63,8 @@ class Order(TimestampedModel):
 
     amocrm_lead = models.OneToOneField("amocrm.AmoCRMOrderLead", on_delete=models.SET_NULL, null=True, blank=True, related_name="order")
     amocrm_transaction = models.OneToOneField("amocrm.AmoCRMOrderTransaction", on_delete=models.SET_NULL, null=True, blank=True, related_name="order")
+
+    analytics = models.JSONField(default=dict)
 
     class Meta:
         ordering = ["-id"]
@@ -83,7 +84,7 @@ class Order(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"Order #{self.pk}"
+        return f"Order #{self.pk}--{self.slug}"
 
     @property
     def is_b2b(self) -> bool:
