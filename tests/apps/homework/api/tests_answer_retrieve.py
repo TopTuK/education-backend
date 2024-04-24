@@ -2,7 +2,7 @@ import pytest
 
 pytestmark = [
     pytest.mark.django_db,
-    pytest.mark.usefixtures("purchase"),
+    pytest.mark.usefixtures("purchase", "_set_current_user"),
 ]
 
 
@@ -67,7 +67,7 @@ def test_non_root_answers_are_ok(api, answer, another_answer):
     api.get(f"/api/v2/homework/answers/{answer.slug}/", expected_status_code=200)
 
 
-def test_answers_with_parents_have_parent_field(api, question, answer, another_answer):
+def test_answers_with_parents_have_parent_field(api, answer, another_answer):
     """Just to document weird behavior of our API: the parent is showed for not root answers only."""
     answer.update(parent=another_answer)
 
@@ -77,7 +77,7 @@ def test_answers_with_parents_have_parent_field(api, question, answer, another_a
 
 
 def test_403_for_not_purchased_users(api, answer, purchase):
-    purchase.refund()
+    purchase.refund(purchase.price)
 
     api.get(
         f"/api/v2/homework/answers/{answer.slug}/",
@@ -86,7 +86,7 @@ def test_403_for_not_purchased_users(api, answer, purchase):
 
 
 def test_ok_for_superusers_even_when_they_did_not_purchase_the_course(api, answer, purchase):
-    purchase.refund()
+    purchase.refund(purchase.price)
 
     api.user.update(is_superuser=True)
 
@@ -97,7 +97,7 @@ def test_ok_for_superusers_even_when_they_did_not_purchase_the_course(api, answe
 
 
 def test_ok_for_users_with_permission_even_when_they_did_not_purchase_the_course(api, answer, purchase):
-    purchase.refund()
+    purchase.refund(purchase.price)
 
     api.user.add_perm("homework.question.see_all_questions")
 
@@ -108,7 +108,7 @@ def test_ok_for_users_with_permission_even_when_they_did_not_purchase_the_course
 
 
 def test_configurable_permissions_checking(api, answer, purchase, settings):
-    purchase.refund()
+    purchase.refund(purchase.price)
 
     settings.DISABLE_HOMEWORK_PERMISSIONS_CHECKING = True
 

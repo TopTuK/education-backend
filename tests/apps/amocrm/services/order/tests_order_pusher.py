@@ -1,11 +1,8 @@
 import pytest
-
 from _decimal import Decimal
 
-from apps.amocrm.models import AmoCRMOrderLead
-from apps.amocrm.models import AmoCRMOrderTransaction
-from apps.amocrm.services.orders.order_pusher import AmoCRMOrderPusher
-from apps.amocrm.services.orders.order_pusher import AmoCRMOrderPusherException
+from apps.amocrm.models import AmoCRMOrderLead, AmoCRMOrderTransaction
+from apps.amocrm.services.orders.order_pusher import AmoCRMOrderPusher, AmoCRMOrderPusherException
 
 pytestmark = [
     pytest.mark.django_db,
@@ -52,7 +49,7 @@ def not_paid_order_with_lead(factory, user, course, amocrm_lead):
 @pytest.fixture
 def returned_order_with_lead(factory, user, course, amocrm_lead):
     order = factory.order(user=user, item=course, is_paid=True, author=user, amocrm_lead=amocrm_lead)
-    order.refund()
+    order.refund(order.price)
     return order
 
 
@@ -91,8 +88,8 @@ def test_created_transaction_is_linked(paid_order_with_lead):
     assert AmoCRMOrderTransaction.objects.get().order == paid_order_with_lead
 
 
-@pytest.mark.usefixtures("not_paid_order_with_lead")
-def test_order_is_relinked(not_paid_order_without_lead, mock_update_lead, amocrm_lead):
+@pytest.mark.usefixtures("mock_update_lead", "not_paid_order_with_lead")
+def test_order_is_relinked(not_paid_order_without_lead, amocrm_lead):
     """Поступил новый открытый заказ, но аналогичная сделка уже есть в Амо - привязываем сделку к текущему заказу"""
     AmoCRMOrderPusher(order=not_paid_order_without_lead)()
 
@@ -101,7 +98,7 @@ def test_order_is_relinked(not_paid_order_without_lead, mock_update_lead, amocrm
 
 
 @pytest.mark.usefixtures("not_paid_order_with_lead")
-def test_amocrm_lead_status_is_updated(not_paid_order_without_lead, mock_update_lead, amocrm_lead):
+def test_amocrm_lead_status_is_updated(not_paid_order_without_lead, mock_update_lead):
     """
     Поступил новый открытый заказ, но аналогичная сделка уже есть в Амо - привязываем сделку к текущему заказу и обновляем сделку в Амо,
     устанавливаем статус как "новое обращение", чтобы гарантированно вернуть сделку в "активное" состояние

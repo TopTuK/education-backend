@@ -1,15 +1,14 @@
 from typing import Any
 
 from celery import group
-
 from django.contrib import messages
 from django.db.models import QuerySet
 from django.http.request import HttpRequest
 from django.utils.translation import gettext as _
 
 from apps.orders import tasks
-from apps.orders.admin.orders.throttling import OrderRefundActionThrottle
 from apps.orders.models import Order
+from apps.orders.services.order_refunder import OrderRefunderException
 from apps.studying.models import Study
 from core.admin import admin
 
@@ -28,15 +27,14 @@ def set_paid(modeladmin: Any, request: HttpRequest, queryset: QuerySet) -> None:
 
 @admin.action(description=_("Refund"), permissions=["unpay"])
 def refund(modeladmin: Any, request: HttpRequest, queryset: QuerySet) -> None:
-    throttle = OrderRefundActionThrottle()
     refunded_orders = []
     non_refunded_orders = []
 
     for order in queryset.iterator():
-        if throttle.allow_request(request, view=modeladmin):
-            order.refund()
+        try:
+            order.refund(order.price)
             refunded_orders.append(order)
-        else:
+        except OrderRefunderException:
             non_refunded_orders.append(order)
 
     if refunded_orders:
@@ -75,7 +73,7 @@ def ship_again_if_paid(modeladmin: Any, request: HttpRequest, queryset: QuerySet
 
     for order in queryset.iterator():
         if order.paid is not None:
-            order.ship(silent=True)
+            order.ship()
             shipped_count += 1
 
     if shipped_count:

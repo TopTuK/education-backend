@@ -1,5 +1,4 @@
 import pytest
-
 import respx
 
 from apps.tinkoff.bank import TinkoffBank
@@ -20,7 +19,7 @@ def _set_absolute_host(settings):
 
 
 @pytest.fixture
-def tinkoff(user, order):
+def tinkoff(user, order):  # noqa: ARG001
     with respx.mock() as m:
         client = TinkoffBank(order)
 

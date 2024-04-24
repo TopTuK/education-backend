@@ -1,5 +1,4 @@
-from abc import ABCMeta
-from abc import abstractmethod
+from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -11,7 +10,7 @@ if TYPE_CHECKING:
 class BaseShipment(metaclass=ABCMeta):
     template_id: str = ""
 
-    def __init__(self, *, user: "User", product: "Course", order: "Order"):
+    def __init__(self, *, user: "User", product: "Course", order: "Order") -> None:
         self.stuff_to_ship = product
         self.user = user
         self.order = order

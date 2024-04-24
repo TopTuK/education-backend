@@ -1,6 +1,5 @@
-from datetime import datetime
-from datetime import timedelta
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from apps.homework.models import Answer
@@ -54,7 +53,7 @@ def test_patch_changing_text_response_fields(api, answer, another_answer):
     assert got["has_descendants"] is False
 
 
-def test_update_answer_without_parent_do_not_have_parent_field_in_response(api, question, answer):
+def test_update_answer_without_parent_do_not_have_parent_field_in_response(api, answer):
     """Just to document weird behavior of our API: we hide the parent field when it is empty"""
     answer.update(parent=None)
 

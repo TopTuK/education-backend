@@ -1,5 +1,5 @@
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
+
 import pytest
 
 pytestmark = [
@@ -47,34 +47,13 @@ def test_order_is_not_shipped_again_if_already_shipped(order, ship):
     ship.assert_not_called()
 
 
-def test_shipment_date_is_not_reset(order, ship):
+def test_shipment_date_is_not_reset(order):
     order.update(shipped=datetime(2000, 11, 12, 1, 13, tzinfo=timezone.utc))
 
     order.set_paid()
     order.refresh_from_db()
 
     assert order.shipped == datetime(2000, 11, 12, 1, 13, tzinfo=timezone.utc)
-
-
-def test_unpaid_date_is_reset(order):
-    order.update(unpaid=datetime(2032, 12, 1, 15, 13, tzinfo=timezone.utc))
-
-    order.set_paid()
-    order.refresh_from_db()
-
-    assert order.unpaid is None
-
-
-def test_unpaid_date_is_not_reset_when_order_is_not_paid(order):
-    order.update(
-        paid=datetime(2032, 12, 1, 12, 13, tzinfo=timezone.utc),
-        unpaid=datetime(2032, 12, 1, 15, 13, tzinfo=timezone.utc),
-    )
-
-    order.set_paid()
-    order.refresh_from_db()
-
-    assert order.unpaid == datetime(2032, 12, 1, 15, 13, tzinfo=timezone.utc), "unpaid has not been changed"
 
 
 def test_empty_item_does_not_break_things(order, ship):

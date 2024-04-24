@@ -1,7 +1,6 @@
 import pytest
 
-from apps.banking.selector import BANK_KEYS
-from apps.banking.selector import BANKS
+from apps.banking.selector import BANK_KEYS, BANKS
 from apps.orders.services import OrderPaidSetter
 
 pytestmark = [pytest.mark.django_db]
@@ -33,7 +32,8 @@ def test(tg_message, order, mock_get_happiness_message):
     )
 
 
-def test_no_notifications_for_already_paid_orders(tg_message, order, mock_get_happiness_message):
+@pytest.mark.usefixtures("mock_get_happiness_message")
+def test_no_notifications_for_already_paid_orders(tg_message, order):
     order.set_paid()
     order.set_paid()
 

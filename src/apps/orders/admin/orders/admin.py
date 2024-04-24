@@ -1,19 +1,17 @@
-from rest_framework.request import Request
-
 from django.db.models import QuerySet
 from django.forms import Media
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
+from rest_framework.request import Request
 
 from apps.orders import human_readable
 from apps.orders.admin.orders import actions
 from apps.orders.admin.orders.filters import OrderStatusFilter
-from apps.orders.admin.orders.forms import OrderAddForm
-from apps.orders.admin.orders.forms import OrderChangeForm
+from apps.orders.admin.orders.forms import OrderAddForm, OrderChangeForm
+from apps.orders.admin.refunds.admin import RefundInline
 from apps.orders.models import Order
 from apps.users.models import Student
-from core.admin import admin
-from core.admin import ModelAdmin
+from core.admin import ModelAdmin, admin
 from core.pricing import format_price
 
 
@@ -58,14 +56,13 @@ class OrderAdmin(ModelAdmin):
         "login_as",
         "paid",
         "shipped",
-        "unpaid",
     ]
 
     fieldsets = [
         (
             None,
             {
-                "fields": ["user", "course", "price", "email", "author", "login_as", "paid", "shipped", "unpaid"],
+                "fields": ["user", "course", "price", "email", "author", "login_as", "paid", "shipped"],
             },
         ),
     ]
@@ -124,3 +121,8 @@ class OrderAdmin(ModelAdmin):
 
     def has_unpay_permission(self, request: Request) -> bool:
         return request.user.has_perm("orders.unpay_order")
+
+    def get_inlines(self, request: Request, obj: "Order | None") -> list:  # type: ignore
+        if obj and obj.paid and (obj.price != 0 or obj.refunds.exists()):
+            return [RefundInline]
+        return []

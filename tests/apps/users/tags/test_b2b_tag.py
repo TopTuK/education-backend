@@ -1,7 +1,6 @@
 import pytest
 
 from apps.users.tags.pipeline import generate_tags
-from apps.mailing.models import PersonalEmailDomain
 
 pytestmark = [
     pytest.mark.django_db,
@@ -31,7 +30,7 @@ def test_with_default_personal_domains(user, domain):
 
     generate_tags(user)
 
-    assert "b2b" not in user.tags
+    assert "b2b" not in user.tags, user.tags
 
 
 @pytest.mark.parametrize("domain", ["yandex-team.ru", "pwc.com", "fands.dev"])

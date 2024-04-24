@@ -1,29 +1,26 @@
-from collections.abc import Sequence
-from datetime import datetime
 import re
-from typing import Any, Mapping, Protocol, Type
-
-from prettyjson import PrettyJSONWidget
+from collections.abc import Mapping, Sequence
+from datetime import datetime
+from typing import Any, Protocol, Type
 
 from django.contrib.humanize.templatetags.humanize import naturalday
 from django.db import models
 from django.db.models import Field
-from django.template.defaultfilters import capfirst
-from django.template.defaultfilters import time
+from django.http import HttpRequest
+from django.template.defaultfilters import capfirst, time
 from django.utils import timezone
 from django.utils.html import format_html
+from prettyjson import PrettyJSONWidget
 
 from core.admin.widgets import AppNumberInput
 
 
 class DjangoModelAdminProtocol(Protocol):
     @property
-    def add_form(self) -> str | None:
-        ...
+    def add_form(self) -> str | None: ...
 
     @property
-    def add_fieldsets(self) -> Sequence[tuple[str | None, Any]]:
-        ...
+    def add_fieldsets(self) -> Sequence[tuple[str | None, Any]]: ...
 
 
 class AppAdminMixin:
@@ -49,7 +46,7 @@ class AppAdminMixin:
             *self.global_exclude,
         )
 
-    def get_form(self: DjangoModelAdminProtocol, request: Any, obj: Type[models.Model] | None = None, **kwargs: Any):  # type: ignore
+    def get_form(self: DjangoModelAdminProtocol, request: Any, obj: Type[models.Model] | None = None, **kwargs: Any) -> str | None:
         """Use special form during object creation"""
         defaults = {}
         if obj is None and hasattr(self, "add_form") and self.add_form is not None:
@@ -58,7 +55,7 @@ class AppAdminMixin:
 
         return super().get_form(request, obj, **defaults)  # type: ignore
 
-    def get_fieldsets(self: DjangoModelAdminProtocol, request: Any, obj=None):  # type: ignore
+    def get_fieldsets(self: DjangoModelAdminProtocol, request: HttpRequest, obj: Type[models.Model] | None = None) -> Any:
         """Use special fieldset during object creation"""
         if not obj and hasattr(self, "add_fieldsets") and self.add_fieldsets is not None:
             return self.add_fieldsets

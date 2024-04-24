@@ -1,10 +1,8 @@
 from dataclasses import dataclass
 
-from apps.amocrm.dto import AmoCRMLeadDTO
-from apps.amocrm.dto import AmoCRMTransactionDTO
+from apps.amocrm.dto import AmoCRMLeadDTO, AmoCRMTransactionDTO
 from apps.amocrm.exceptions import AmoCRMServiceException
-from apps.amocrm.models import AmoCRMOrderLead
-from apps.amocrm.models import AmoCRMOrderTransaction
+from apps.amocrm.models import AmoCRMOrderLead, AmoCRMOrderTransaction
 from apps.orders.models import Order
 from core.services import BaseService
 
@@ -85,7 +83,9 @@ class AmoCRMOrderPusher(BaseService):
             return False
         if self.order.price == 0:
             return False
-        if Order.objects.paid().same_deal(order=self.order).filter(amocrm_lead__isnull=False).exists():  # we have other paid orders for the same deal
+        if (
+            Order.objects.paid().same_deal(order=self.order).filter(amocrm_lead__isnull=False, price__gt=0).exists()
+        ):  # we have other paid orders for the same deal
             return False
 
         return True

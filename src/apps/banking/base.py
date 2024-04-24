@@ -1,9 +1,8 @@
-from abc import ABCMeta
-from abc import abstractmethod
+import uuid
+from abc import ABCMeta, abstractmethod
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from urllib.parse import urljoin
-import uuid
 
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
@@ -41,7 +40,7 @@ class Bank(metaclass=ABCMeta):
     def get_initial_payment_url(self) -> str:
         raise NotImplementedError()
 
-    def refund(self) -> None:
+    def refund(self, amount: Decimal | None = None) -> None:
         return
 
     def validate_order(self, order: "Order") -> None:  # NOQA: B027
@@ -58,11 +57,18 @@ class Bank(metaclass=ABCMeta):
 
     @property
     def price(self) -> int | str:
-        from apps.banking import price_calculator
-
-        price = price_calculator.to_bank(bank=self.__class__, price=self.order.price)
-        return int(price * 100)
+        return self.get_formatted_amount(self.order.price)
 
     @property
     def user(self) -> "User":
         return self.order.user
+
+    @property
+    def is_partial_refund_available(self) -> bool:
+        return False
+
+    def get_formatted_amount(self, amount: Decimal) -> int:
+        from apps.banking import price_calculator
+
+        price = price_calculator.to_bank(bank=self.__class__, price=amount)
+        return int(price * 100)

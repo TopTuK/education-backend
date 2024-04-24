@@ -5,6 +5,7 @@ from apps.amocrm.services.orders.order_returner import AmoCRMOrderReturner
 
 pytestmark = [
     pytest.mark.django_db,
+    pytest.mark.usefixtures("_set_current_user"),
 ]
 
 
@@ -21,13 +22,13 @@ def mock_delete_transaction(mocker):
 @pytest.fixture
 def unpaid_order(mixer, paid_order_with_lead):
     mixer.blend("amocrm.AmoCRMOrderTransaction", order=paid_order_with_lead, amocrm_id=876)
-    paid_order_with_lead.refund()
+    paid_order_with_lead.refund(paid_order_with_lead.price)
     return paid_order_with_lead
 
 
 @pytest.fixture
 def unpaid_order_not_in_amo(paid_order_without_lead):
-    paid_order_without_lead.refund()
+    paid_order_without_lead.refund(paid_order_without_lead.price)
     return paid_order_without_lead
 
 
@@ -43,7 +44,8 @@ def test_correct_calls(order_returner, unpaid_order, mock_update_lead, mock_dele
     mock_delete_transaction.assert_called_once()
 
 
-def test_delete_transaction(order_returner, unpaid_order, mock_update_lead, mock_delete_transaction):
+@pytest.mark.usefixtures("mock_delete_transaction", "mock_update_lead")
+def test_delete_transaction(order_returner, unpaid_order):
     order_returner(unpaid_order)
 
     assert AmoCRMOrderTransaction.objects.count() == 0
