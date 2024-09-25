@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-10 15:20+0300\n"
+"POT-Creation-Date: 2024-09-04 21:20+0300\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
@@ -227,7 +227,7 @@ msgstr "Ответы на домашку"
 msgid "May see answers from every user"
 msgstr "Видит все ответы на домашку"
 
-#: apps/homework/models/answer_cross_check.py:11
+#: apps/homework/models/answer_cross_check.py:29
 msgid "Date when crosscheck got checked"
 msgstr "Когда проверен"
 
@@ -332,6 +332,28 @@ msgstr "Домен личного email"
 msgid "Personal email domains"
 msgstr "Домены личных email"
 
+#: apps/notion/admin/material.py:73
+msgid "LMS"
+msgstr ""
+
+#: apps/notion/admin/material.py:83
+#, fuzzy
+#| msgid "Notion page id"
+msgid "Notion"
+msgstr "ID страницы в ноушене"
+
+#: apps/notion/admin/video.py:33
+msgid "Youtube"
+msgstr "Youtube"
+
+#: apps/notion/admin/video.py:37
+msgid "RuTube"
+msgstr "Rutube"
+
+#: apps/notion/admin/video.py:37
+msgid "This video is already in the database"
+msgstr "Это видео уже добавлено"
+
 #: apps/notion/models/asset.py:11
 msgid "Image size in bytes"
 msgstr ""
@@ -343,10 +365,12 @@ msgid "Notion asset"
 msgstr "ID страницы в ноушене"
 
 #: apps/notion/models/asset.py:16
-#, fuzzy
-#| msgid "Notion materials"
 msgid "Notion assets"
-msgstr "Материалы"
+msgstr "Файлы"
+
+#: apps/notion/models/material.py:43
+msgid "Our page id"
+msgstr "ID страницы LMS"
 
 #: apps/notion/models/material.py:45
 msgid "Page title"
@@ -394,6 +418,22 @@ msgstr "Файл"
 #: apps/notion/models/material_file.py:11
 msgid "Material files"
 msgstr "Файлы"
+
+#: apps/notion/models/video.py:9 apps/notion/models/video.py:10
+msgid "Paste it from the address bar"
+msgstr "Скопируйте адрес из строки браузера"
+
+#: apps/notion/models/video.py:9
+msgid "Title"
+msgstr "Название"
+
+#: apps/notion/models/video.py:15
+msgid "Notion video"
+msgstr "Видео"
+
+#: apps/notion/models/video.py:16
+msgid "Notion videos"
+msgstr "Видео"
 
 #: apps/orders/admin/orders/actions.py:21
 msgid "Set paid"
@@ -472,7 +512,7 @@ msgstr "Оплачен"
 msgid "Shipped without payment"
 msgstr "Ждём денег"
 
-#: apps/orders/admin/orders/forms.py:11 apps/users/admin/student.py:13
+#: apps/orders/admin/orders/forms.py:11 apps/users/admin/student.py:12
 msgid "Email"
 msgstr "Почта"
 
@@ -602,17 +642,15 @@ msgstr "Заказ"
 
 #: apps/orders/models/refund.py:26
 msgid "Amount"
-msgstr ""
+msgstr "Сумма"
 
 #: apps/orders/models/refund.py:28
 msgid "Order bank at the moment of refund"
 msgstr ""
 
 #: apps/orders/models/refund.py:32
-#, fuzzy
-#| msgid "Refund"
 msgid "Refunds"
-msgstr "Сделать полный возврат"
+msgstr "Возвраты"
 
 #: apps/orders/services/order_refunder.py:86
 #, fuzzy
@@ -639,10 +677,8 @@ msgstr ""
 "возвратов в день, попробуйте снова завтра."
 
 #: apps/orders/services/order_refunder.py:94
-#, fuzzy
-#| msgid "Partial refunds"
 msgid "Partial refund is not available"
-msgstr "Возвраты"
+msgstr "Частичные возвраты недоступны"
 
 #: apps/orders/services/order_refunder.py:98
 msgid "Only 0 can be refunded for not paid order"
@@ -781,8 +817,20 @@ msgstr "Если оставить пустым — будет дефолтным
 msgid "Records"
 msgstr "Записи"
 
-#: apps/stripebank/bank.py:17
+#: apps/stripebank/bank.py:15
 msgid "Stripe"
+msgstr "Страйп"
+
+#: apps/stripebank/bank.py:69
+#, fuzzy
+#| msgid "Stripe"
+msgid "Stripe USD"
+msgstr "Страйп"
+
+#: apps/stripebank/bank.py:78
+#, fuzzy
+#| msgid "Stripe"
+msgid "Stripe KZT"
 msgstr "Страйп"
 
 #: apps/studying/apps.py:8 apps/studying/apps.py:9
@@ -851,19 +899,19 @@ msgstr ""
 msgid "Completed"
 msgstr ""
 
-#: apps/users/admin/student.py:14
+#: apps/users/admin/student.py:13
 msgid "first name"
 msgstr "Имя"
 
-#: apps/users/admin/student.py:15
+#: apps/users/admin/student.py:14
 msgid "last name"
 msgstr "Фамилия"
 
-#: apps/users/admin/student.py:61
+#: apps/users/admin/student.py:56
 msgid "Personal info"
 msgstr "Персональные данные"
 
-#: apps/users/admin/student.py:62
+#: apps/users/admin/student.py:57
 msgid "Name in english"
 msgstr "Имя на английском"
 

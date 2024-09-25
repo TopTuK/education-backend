@@ -6,6 +6,8 @@ from core.conf.environ import env
 AUTH_USER_MODEL = "users.User"
 
 AXES_ENABLED = env("AXES_ENABLED", cast=bool, default=True)
+AXES_FAILURE_LIMIT = 10
+AXES_COOLOFF_TIME = 24
 
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesBackend",
@@ -45,8 +47,8 @@ if not keys["private"]:
 
 
 JWT_AUTH = {
-    "JWT_EXPIRATION_DELTA": timedelta(days=14),
-    "JWT_REFRESH_EXPIRATION_DELTA": timedelta(days=21),
+    "JWT_EXPIRATION_DELTA": timedelta(days=3650),
+    "JWT_REFRESH_EXPIRATION_DELTA": timedelta(days=3650),
     "JWT_ALLOW_REFRESH": True,
     "JWT_ISSUER": "education-backend",
     "JWT_ALGORITHM": "RS256",
