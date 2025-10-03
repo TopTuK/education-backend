@@ -1,6 +1,7 @@
 from typing import Any
 
 from django.db.models import QuerySet
+from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import MethodNotAllowed
@@ -11,68 +12,102 @@ from rest_framework.response import Response
 
 from apps.homework.api.filtersets import AnswerFilterSet
 from apps.homework.api.permissions import (
-    MayChangeAnswerOnlyForLimitedTime,
-    MayChangeAnswerOnlyWithoutDescendants,
-    ShouldBeAuthorOrReadOnly,
-    ShouldHavePurchasedQuestionCoursePermission,
+    AuthorOrReadonly,
+    IsEditable,
 )
 from apps.homework.api.serializers import (
     AnswerCreateSerializer,
-    AnswerDetailedSerializer,
+    AnswerSerializer,
+    AnswerTreeSerializer,
+    AnswerUpdateSerializer,
     ReactionCreateSerializer,
     ReactionDetailedSerializer,
 )
-from apps.homework.models import Answer, AnswerAccessLogEntry
+from apps.homework.models import Answer
 from apps.homework.models.answer import AnswerQuerySet
 from apps.homework.models.reaction import Reaction
-from apps.homework.services import ReactionCreator
-from apps.homework.services.answer_creator import AnswerCreator
-from apps.homework.services.answer_remover import AnswerRemover
+from apps.homework.services import AnswerCreator, AnswerRemover, AnswerUpdater, ReactionCreator
+from apps.users.models import User
 from core.api.mixins import DisablePaginationWithQueryParamMixin
 from core.viewsets import AppViewSet, CreateDeleteAppViewSet
 
 
+@method_decorator(
+    extend_schema(
+        description="List allowed answers",
+    ),
+    name="list",
+)
+@method_decorator(
+    extend_schema(
+        description="Get an answer by slug (any answer can be accessible if user knows the slug",
+        responses=AnswerTreeSerializer,
+    ),
+    name="retrieve",
+)
 class AnswerViewSet(DisablePaginationWithQueryParamMixin, AppViewSet):
+    """Answer CRUD"""
+
     queryset = Answer.objects.for_viewset()
-    serializer_class = AnswerDetailedSerializer
+    serializer_class = AnswerSerializer
     serializer_action_classes = {
-        "create": AnswerCreateSerializer,
-        "partial_update": AnswerCreateSerializer,
+        "partial_update": AnswerUpdateSerializer,
+        "retrieve": AnswerTreeSerializer,
     }
 
     lookup_field = "slug"
     permission_classes = [
-        IsAuthenticated
-        & ShouldHavePurchasedQuestionCoursePermission
-        & ShouldBeAuthorOrReadOnly
-        & MayChangeAnswerOnlyForLimitedTime
-        & MayChangeAnswerOnlyWithoutDescendants,
+        IsAuthenticated & AuthorOrReadonly & IsEditable,
     ]
     filterset_class = AnswerFilterSet
 
+    @extend_schema(request=AnswerCreateSerializer, responses=AnswerTreeSerializer)
     def create(self, request: Request, *args: Any, **kwargs: dict[str, Any]) -> Response:
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        answer = AnswerCreator(data=serializer.validated_data.copy(), user=self.request.user)()  # type: ignore
-        answer = self.get_queryset().get(pk=answer.pk)
+        """Create an answer"""
 
+        answer = AnswerCreator(
+            question_slug=request.data.get("question"),  # type: ignore
+            parent_slug=request.data.get("parent"),
+            text=request.data.get("text", ""),
+            content=request.data.get("content", {}),
+        )()
+
+        answer = self.get_queryset().get(pk=answer.pk)  # augment answer with annotations from .for_viewset() to display it properly
         Serializer = self.get_serializer_class(action="retrieve")
-        return Response(Serializer(answer).data, status=201)
+        return Response(
+            Serializer(
+                answer,
+                context=self.get_serializer_context(),
+            ).data,
+            status=201,
+        )
 
+    @extend_schema(request=AnswerUpdateSerializer, responses=AnswerTreeSerializer)
     def update(self, request: Request, *args: Any, **kwargs: dict[str, Any]) -> Response:
+        """Update answer text"""
+
         if not kwargs.get("partial", False):
             raise MethodNotAllowed("Please use patch")
 
-        response = super().update(request, *args, **kwargs)
+        AnswerUpdateSerializer(data=request.data).is_valid(raise_exception=True)
 
         answer = self.get_object()
-        answer.refresh_from_db()
-        Serializer = self.get_serializer_class(action="retrieve")
-        response.data = Serializer(answer).data
+        answer = AnswerUpdater(
+            answer=self.get_object(),
+            content=request.data["content"],
+        )()
 
-        return response
+        Serializer = self.get_serializer_class(action="retrieve")
+        return Response(
+            Serializer(
+                answer,
+                context=self.get_serializer_context(),
+            ).data,
+            status=200,
+        )
 
     def destroy(self, request: Request, *args: Any, **kwargs: dict[str, Any]) -> Response:
+        """Remove an answer if allowed"""
         AnswerRemover(instance=self.get_object())()
         return Response(status=204)
 
@@ -85,8 +120,9 @@ class AnswerViewSet(DisablePaginationWithQueryParamMixin, AppViewSet):
         return queryset.with_children_count().order_by("created").prefetch_reactions()
 
     def limit_queryset_to_user(self, queryset: AnswerQuerySet) -> AnswerQuerySet:
-        if self.action != "retrieve":
-            return queryset.allowed_for_user(self.request.user)  # type: ignore
+        if self.action != "retrieve" and not self.user.has_perm("homework.see_all_answers"):
+            # Each user may access any answer knowing its slug
+            return queryset.for_user(self.user)
 
         return queryset
 
@@ -96,21 +132,9 @@ class AnswerViewSet(DisablePaginationWithQueryParamMixin, AppViewSet):
 
         return queryset
 
-    def get_object(self) -> Answer:
-        """Write a log entry for each answer from another user that is retrieved"""
-        instance = super().get_object()
-
-        self.write_log_entry(answer=instance)
-
-        return instance
-
-    def write_log_entry(self, answer: Answer) -> None:
-        if not self.request.user.has_perm("homework.see_all_answers"):
-            if answer.author != self.request.user:
-                AnswerAccessLogEntry.objects.get_or_create(
-                    user=self.request.user,
-                    answer=answer,
-                )
+    @property
+    def user(self) -> User:
+        return self.request.user  # type: ignore
 
 
 class ReactionViewSet(CreateDeleteAppViewSet):
@@ -119,12 +143,13 @@ class ReactionViewSet(CreateDeleteAppViewSet):
     serializer_action_classes = {
         "create": ReactionCreateSerializer,
     }
-    permission_classes = [IsAuthenticated & ShouldBeAuthorOrReadOnly]
+    permission_classes = [IsAuthenticated & AuthorOrReadonly]
 
     lookup_field = "slug"
 
-    @extend_schema(responses=ReactionDetailedSerializer)
+    @extend_schema(request=ReactionCreateSerializer, responses=ReactionDetailedSerializer)
     def create(self, request: Request, *args: Any, **kwargs: dict[str, Any]) -> Response:
+        """Create a reaction"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data.copy()

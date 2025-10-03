@@ -12,29 +12,24 @@ def api(api):
 
 
 @pytest.fixture
-def ya_user(mixer):
-    return mixer.blend("users.User")
+def question(factory, course):
+    """Question that belongs to a course"""
+    return factory.question(course=course)
 
 
 @pytest.fixture
-def question(mixer, course):
-    question = mixer.blend("homework.Question")
-    question.courses.add(course)
-
-    return question
-
-
-@pytest.fixture
-def another_question(mixer, course):
-    another_question = mixer.blend("homework.Question")
-    another_question.courses.add(course)
-
-    return another_question
+def another_question(factory, course):
+    return factory.question(course=course)
 
 
 @pytest.fixture
 def answer(mixer, question, api):
-    return mixer.blend("homework.Answer", question=question, author=api.user, text="*test*")
+    return mixer.blend(
+        "homework.Answer",
+        question=question,
+        author=api.user,
+        content={"type": "doc", "text": "Пыщ!"},
+    )
 
 
 @pytest.fixture
@@ -61,9 +56,18 @@ def purchase(factory, course, api):
 
 
 @pytest.fixture
-def _no_purchase(purchase):
+def purchase_of_another_course(factory, another_course, api):
+    order = factory.order(user=api.user, item=another_course)
+    order.set_paid()
+
+    return order
+
+
+@pytest.fixture
+def _no_purchase(purchase, purchase_of_another_course, _set_current_user):
     """Invalidate the purchase"""
-    purchase.update(paid=None)
+    purchase.refund(amount=purchase.price)
+    purchase_of_another_course.refund(amount=purchase_of_another_course.price)
 
 
 @pytest.fixture

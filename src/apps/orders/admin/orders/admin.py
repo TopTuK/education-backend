@@ -1,5 +1,8 @@
-from django.db.models import QuerySet
-from django.forms import Media
+from typing import Any
+
+from django.db.models import ForeignKey, QuerySet
+from django.forms.models import ModelChoiceField
+from django.http import HttpRequest
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
 from rest_framework.request import Request
@@ -10,7 +13,9 @@ from apps.orders.admin.orders.filters import OrderStatusFilter
 from apps.orders.admin.orders.forms import OrderAddForm, OrderChangeForm
 from apps.orders.admin.refunds.admin import RefundInline
 from apps.orders.models import Order
-from apps.users.models import Student
+from apps.products.admin.filters import CourseFilter
+from apps.products.models import Course
+from apps.users.models import AdminUserProxy
 from core.admin import ModelAdmin, admin
 from core.pricing import format_price
 
@@ -33,11 +38,9 @@ class OrderAdmin(ModelAdmin):
 
     list_filter = [
         OrderStatusFilter,
-        "course",
+        CourseFilter,
     ]
     search_fields = [
-        "course__name",
-        "record__course__name",
         "user__first_name",
         "user__last_name",
         "user__email",
@@ -53,6 +56,8 @@ class OrderAdmin(ModelAdmin):
     ]
     readonly_fields = [
         "author",
+        "deal",
+        "email",
         "login_as",
         "paid",
         "shipped",
@@ -62,18 +67,14 @@ class OrderAdmin(ModelAdmin):
         (
             None,
             {
-                "fields": ["user", "course", "price", "email", "author", "login_as", "paid", "shipped"],
+                "fields": ["user", "email", "course", "price", "deal", "author", "login_as", "paid", "shipped", "bank_id"],
             },
         ),
     ]
 
-    @property
-    def media(self) -> Media:
-        media = super().media
-
-        media._css_lists.append({"all": ["admin/order_list.css"]})  # type: ignore
-
-        return media
+    class Media:
+        css = {"all": ["admin/order_list.css"]}
+        js = ["admin/js/vendor/jquery/jquery.js", "admin/check_partial_refunds.js"]
 
     def get_queryset(self, request: Request) -> QuerySet:  # type: ignore
         return (
@@ -85,6 +86,19 @@ class OrderAdmin(ModelAdmin):
                 "course",
             )
         )
+
+    def formfield_for_foreignkey(self, db_field: ForeignKey, request: HttpRequest, **kwargs: Any) -> ModelChoiceField:
+        if str(db_field) == "orders.Order.course" and request.method == "GET":
+            if "add" in request.path:
+                kwargs["queryset"] = Course.objects.for_admin()
+            else:
+                kwargs["queryset"] = Course.objects.select_related("group")
+
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    @admin.display(description=_("email"))
+    def email(self, obj: Order) -> str:
+        return obj.user.email
 
     @admin.display(description=_("Price"), ordering="price")
     def formatted_price(self, obj: Order) -> str:
@@ -112,7 +126,7 @@ class OrderAdmin(ModelAdmin):
         if obj.pk is None:
             return "—"  # type: ignore
 
-        login_as_url = Student.objects.get(pk=obj.user_id).get_absolute_url()
+        login_as_url = AdminUserProxy.objects.get(pk=obj.user_id).get_absolute_url()
 
         return f'<a href="{login_as_url}" target="_blank">Зайти</a>'
 
@@ -123,6 +137,6 @@ class OrderAdmin(ModelAdmin):
         return request.user.has_perm("orders.unpay_order")
 
     def get_inlines(self, request: Request, obj: "Order | None") -> list:  # type: ignore
-        if obj and obj.paid and (obj.price != 0 or obj.refunds.exists()):
+        if obj and obj.paid:
             return [RefundInline]
         return []

@@ -9,7 +9,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
-        "rest_framework_jwt.authentication.JSONWebTokenAuthentication",
+        "apps.a12n.jwt.AppJSONWebTokenAuthentication",
     ],
     "DEFAULT_RENDERER_CLASSES": [
         "core.renderers.AppJSONRenderer",
@@ -22,13 +22,11 @@ REST_FRAMEWORK = {
         "anon-auth": "10/min",
         "public-id": "60/hour",
         "notion-materials": "100/hour",
-        "promocode": "100/hour",
+        "order-draft": "100/hour",
         "purchase": "100/hour",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
-DRF_RECAPTCHA_SECRET_KEY = env("RECAPTCHA_SECRET_KEY", cast=str, default="")
-DRF_RECAPTCHA_TESTING = DRF_RECAPTCHA_TESTING_PASS = not env("RECAPTCHA_ENABLED", cast=bool, default=True)
 
 if env("DEBUG"):
     REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"].append("rest_framework.authentication.SessionAuthentication")  # type: ignore
@@ -43,6 +41,7 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "REDOC_DIST": "SIDECAR",
+    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
     ],

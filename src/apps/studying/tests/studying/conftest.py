@@ -20,7 +20,15 @@ def api(api):
 
 @pytest.fixture
 def course(factory):
-    return factory.course(name="Ихтеология для 5 класса", slug="ichteology")
+    return factory.course(
+        name="Ихтеология для 5 класса",
+        tariff_name="Самостоятельно",
+        slug="ichteology",
+        cover="test.gif",
+        calendar_ios="ios://cal",
+        calendar_google="google://cal",
+        chat="https://t.me/chat",
+    )
 
 
 @pytest.fixture(autouse=True)

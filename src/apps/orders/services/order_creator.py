@@ -10,12 +10,14 @@ from django.urls import reverse
 from django.utils.functional import cached_property
 
 from apps.amocrm.tasks import amocrm_enabled, push_order, push_user
+from apps.b2b.models import Deal
 from apps.banking.base import Bank
 from apps.banking.selector import get_bank_or_default
 from apps.dashamail import tasks as dashamail
+from apps.dashamail.enabled import dashamail_enabled
 from apps.mailing.tasks import send_mail
 from apps.orders.models import Order, PromoCode
-from apps.products.models.base import Shippable
+from apps.products.models import Course
 from apps.users.models import User
 from apps.users.tasks import rebuild_tags
 from core.current_user import get_current_user
@@ -31,19 +33,32 @@ class OrderCreatorException(AppServiceException):
 @dataclass
 class OrderCreator(BaseService):
     user: User
-    item: Shippable
+    item: Course
+    subscribe: bool | None = False
     price: Decimal | None = None
+    author: User | None = None
     promocode: str | None = None
     desired_bank: str | None = None
     analytics: str | None = None
-
-    subscribe: bool = False
-    push_to_amocrm: bool = True
+    deal: Deal | None = None
+    raw: dict | None = None
 
     def __post_init__(self) -> None:
-        self.price = self.price if self.price is not None else self.item.get_price(promocode=self.promocode)
+        self.price = self.price if self.price is not None else self.item.price
         self.promocode = self._get_promocode(self.promocode)
+        if self.promocode is not None:
+            self.price = self.promocode.apply(self.item)
+
         self.desired_bank = self.desired_bank if self.desired_bank is not None else ""
+
+    def get_author(self) -> User:
+        """Author (seller) of the order.
+        1. Particular author, e.g. when creating order from the b2b deal
+        2. Current user, e.g. when creating order from the admin interface
+        3. Student himself, self-ordering from the website
+        """
+
+        return next(author for author in [self.author, get_current_user(), self.user] if author is not None)
 
     def act(self) -> Order:
         order = self.create()
@@ -51,25 +66,30 @@ class OrderCreator(BaseService):
         order.set_item(self.item)
         order.save()
 
+        self.save_acquring_details(order)
+
         self.send_confirmation_message(order)
         self.update_user_tags(order)
 
-        self.do_push_to_amocrm(order)
-        self.do_push_to_dashamail(order)
-        self.do_push_to_dashamail_directcrm(order)
+        if amocrm_enabled():
+            self.push_to_amocrm(order)
+
+        if self.subscribe and dashamail_enabled():
+            self.push_to_dashamail(order)
+            self.push_to_dashamail_directcrm(order)
 
         return order
 
     def create(self) -> Order:
         return Order.objects.create(
             user=self.user,
-            author=get_current_user() or self.user,
+            author=self.get_author(),
             price=self.price,  # type: ignore
             promocode=self.promocode,
+            deal=self.deal,
             bank_id=self.desired_bank,
-            ue_rate=self.bank.ue,
-            acquiring_percent=self.bank.acquiring_percent,
             analytics=self._parse_analytics(self.analytics),
+            raw=self.raw if self.raw is not None else {},
         )
 
     @staticmethod
@@ -100,13 +120,18 @@ class OrderCreator(BaseService):
                     ctx=self._get_confirmation_template_context(order),
                 )
 
-    def update_user_tags(self, order: Order) -> None:
+    def save_acquring_details(self, order: Order) -> None:
+        bank = self.bank(order)
+        order.acquiring_percent = bank.get_acquiring_percent()
+        order.ue_rate = bank.get_currency_rate()
+
+        order.save(update_fields=["modified", "acquiring_percent", "ue_rate"])
+
+    @staticmethod
+    def update_user_tags(order: Order) -> None:
         rebuild_tags.delay(student_id=order.user_id)
 
-    def do_push_to_amocrm(self, order: Order) -> None:
-        if not self.push_to_amocrm or not amocrm_enabled():
-            return
-
+    def push_to_amocrm(self, order: Order) -> None:
         if order.price <= 0:
             return
 
@@ -115,14 +140,14 @@ class OrderCreator(BaseService):
             push_order.si(order_id=order.id),
         ).apply_async(countdown=10)
 
-    def do_push_to_dashamail(self, order: Order) -> None:
-        if self.subscribe and order.user.email and len(order.user.email):
+    def push_to_dashamail(self, order: Order) -> None:
+        if order.user.email and len(order.user.email):
             dashamail.update_subscription.apply_async(
                 kwargs={"student_id": order.user.id},
                 countdown=30,
             )  # hope rebuild_tags from push_to_amocrm is complete
 
-    def do_push_to_dashamail_directcrm(self, order: Order) -> None:
+    def push_to_dashamail_directcrm(self, order: Order) -> None:
         chain(
             dashamail.directcrm_subscribe.si(order_id=order.pk),
             dashamail.push_order_event.si(

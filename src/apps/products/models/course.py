@@ -1,22 +1,34 @@
+from datetime import timedelta
+from typing import TYPE_CHECKING
+
 from django.apps import apps
 from django.core.exceptions import ValidationError
-from django.db.models import OuterRef, QuerySet, Subquery
+from django.db.models import OuterRef, Q, QuerySet, Subquery
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.mailing.tasks import send_mail
-from apps.products.models.base import Shippable
+from apps.studying import shipment_factory as ShipmentFactory
 from apps.users.models import User
 from core.files import RandomFileName
-from core.models import models
+from core.models import TimestampedModel, models
+
+if TYPE_CHECKING:
+    from apps.orders.models import Order
 
 
 class CourseQuerySet(QuerySet):
-    def for_lms(self) -> QuerySet["Course"]:
+    def for_user(self, user: User) -> "CourseQuerySet":
+        if user.has_perm("studying.purchased_all_courses"):
+            return self
+
+        return self.purchased_by(user)
+
+    def for_lms(self) -> "CourseQuerySet":
         return self.filter(
             display_in_lms=True,
         ).with_course_homepage()
 
-    def with_course_homepage(self) -> QuerySet["Course"]:
+    def with_course_homepage(self) -> "CourseQuerySet":
         materials = (
             apps.get_model("notion.Material")
             .objects.filter(
@@ -35,15 +47,43 @@ class CourseQuerySet(QuerySet):
             home_page_slug=Subquery(materials[:1]),
         )
 
+    def for_admin(self) -> "CourseQuerySet":
+        return self.select_related("group").filter(Q(group__created__gte=timezone.now() - timedelta(days=365)) | Q(group__evergreen=True))
+
+    def purchased_by(self, user: User) -> "CourseQuerySet":
+        return self.filter(
+            id__in=apps.get_model("studying.Study").objects.filter(student=user).values("course"),
+        )
+
 
 CourseManager = models.Manager.from_queryset(CourseQuerySet)
 
 
-class Course(Shippable):
+class Course(TimestampedModel):
     objects = CourseManager()
 
+    product_name = models.CharField(_("Name"), max_length=255)
+    tariff_name = models.CharField(_("Tariff name"), null=True, blank=True, max_length=64)
     name_genitive = models.CharField(_("Genitive name"), max_length=255, help_text="«мастер-класса о TDD». К примеру для записей.")
+    name_receipt = models.CharField(
+        _("Name for receipts"), max_length=255, help_text="«посещение мастер-класса по TDD» или «Доступ к записи курсов кройки и шитья»"
+    )
+    full_name = models.CharField(
+        _("Full name for letters"),
+        max_length=255,
+        help_text="Билет на мастер-класс о TDD или «запись курсов кройки и шитья»",
+    )
+    name_international = models.CharField(_("Name used for international purchases"), max_length=255)
 
+    group = models.ForeignKey("products.Group", verbose_name=_("Product group"), on_delete=models.PROTECT)
+    slug = models.SlugField(unique=True)
+
+    price = models.DecimalField(max_digits=8, decimal_places=2)
+    old_price = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+
+    tinkoff_credit_promo_code = models.CharField(
+        _("Fixed promo code for tinkoff credit"), max_length=64, blank=True, help_text=_("Used in tinkoff credit only")
+    )
     welcome_letter_template_id = models.CharField(
         _("Welcome letter template id"), max_length=255, blank=True, null=True, help_text=_("Will be sent upon purchase if set")
     )
@@ -61,6 +101,12 @@ class Course(Shippable):
         help_text=_("If set user sill receive this message upon creating zero-priced order"),
     )
     confirmation_success_url = models.URLField(_("Confirmation success URL"), null=True, blank=True)
+    purchase_success_url = models.URLField(_("Purchase success URL"), null=True, blank=True)
+
+    calendar_google = models.URLField(_("Calendar URL (Google)"), blank=True, null=True)
+    calendar_ios = models.URLField(_("Calendar URL (iOS)"), blank=True, null=True)
+
+    chat = models.URLField(_("Chat URL"), blank=True, null=True)
 
     cover = models.ImageField(
         verbose_name=_("Cover image"),
@@ -69,11 +115,29 @@ class Course(Shippable):
         help_text=_("The cover image of course"),
     )
 
+    homework_check_recommendations = models.TextField(_("Homework check recommendations"), blank=True)
+
     class Meta:
         ordering = ["-id"]
         verbose_name = _("Course")
         verbose_name_plural = _("Courses")
         db_table = "courses_course"
+
+    @property
+    def name(self) -> str:
+        if self.tariff_name is not None and len(self.tariff_name) > 0:
+            return f"{self.product_name} ({self.tariff_name})"
+
+        return self.product_name
+
+    def __str__(self) -> str:
+        return f"{self.name} - {self.group.name}"
+
+    def ship(self, to: User, order: "Order") -> None:
+        return ShipmentFactory.ship(self, to=to, order=order)
+
+    def unship(self, order: "Order") -> None:
+        return ShipmentFactory.unship(order=order)
 
     def clean(self) -> None:
         """Check for correct setting of confirmation_template_id and confirmation_success_url"""
@@ -90,18 +154,3 @@ class Course(Shippable):
         return User.objects.filter(
             pk__in=apps.get_model("studying.Study").objects.filter(course=self).values_list("student", flat=True),
         )
-
-    def send_email_to_all_purchased_users(self, template_id: str) -> None:
-        for user in self.get_purchased_users().iterator():
-            send_mail.delay(
-                to=user.email,
-                template_id=template_id,
-            )
-
-    def __str__(self) -> str:
-        name = getattr(self, "name", None)
-        group = getattr(self, "group", None)
-        if name is not None and group is not None:
-            return f"{name} - {group.name}"
-
-        return super().__str__()

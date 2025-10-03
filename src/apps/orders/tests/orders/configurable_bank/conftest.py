@@ -1,5 +1,7 @@
 import pytest
 
+from apps.banking.models import Currency
+
 pytestmark = [pytest.mark.django_db]
 
 
@@ -50,17 +52,22 @@ def dolyame_bank(mocker):
     return mocker.patch("apps.tinkoff.dolyame.Dolyame.get_initial_payment_url", return_value="https://mocked.link")
 
 
-@pytest.fixture(autouse=True)
-def _freeze_ue_rate(mocker):
-    mocker.patch("apps.tinkoff.bank.TinkoffBank.ue", 11)
-    mocker.patch("apps.stripebank.bank.StripeBankUSD.ue", 33)
-    mocker.patch("apps.stripebank.bank.StripeBankKZT.ue", 33)
-    mocker.patch("apps.tinkoff.dolyame.Dolyame.ue", 44)
+@pytest.fixture
+def _remove_preconfigured_currency_rates():
+    Currency.objects.all().delete()
 
 
 @pytest.fixture(autouse=True)
-def _freeze_acquiring_percent(mocker):
-    mocker.patch("apps.tinkoff.bank.TinkoffBank.acquiring_percent", "1.2")
-    mocker.patch("apps.stripebank.bank.StripeBankUSD.acquiring_percent", "1.4")
-    mocker.patch("apps.stripebank.bank.StripeBankKZT.acquiring_percent", "1.4")
-    mocker.patch("apps.tinkoff.dolyame.Dolyame.acquiring_percent", "1.5")
+def _freeze_currency_rate_rate(mocker, _remove_preconfigured_currency_rates):
+    mocker.patch("apps.tinkoff.bank.TinkoffBank.default_currency_rate", "11")
+    mocker.patch("apps.stripebank.bank.StripeBankUSD.default_currency_rate", "33")
+    mocker.patch("apps.stripebank.bank.StripeBankKZT.default_currency_rate", "33")
+    mocker.patch("apps.tinkoff.dolyame.Dolyame.default_currency_rate", "44")
+
+
+@pytest.fixture(autouse=True)
+def _freeze_default_acquiring_percent(mocker):
+    mocker.patch("apps.tinkoff.bank.TinkoffBank.default_acquiring_percent", "1.2")
+    mocker.patch("apps.stripebank.bank.StripeBankUSD.default_acquiring_percent", "1.4")
+    mocker.patch("apps.stripebank.bank.StripeBankKZT.default_acquiring_percent", "1.4")
+    mocker.patch("apps.tinkoff.dolyame.Dolyame.default_acquiring_percent", "1.5")

@@ -6,9 +6,9 @@ from behaviors.behaviors import Timestamped
 from django.db import models
 
 __all__ = [
-    "models",
     "DefaultModel",
     "TimestampedModel",
+    "models",
 ]
 
 
@@ -17,7 +17,7 @@ class TestUtilsMixin:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.save()
+        self.save(update_fields=kwargs.keys())
 
         return self
 
@@ -43,6 +43,18 @@ class TimestampedModel(DefaultModel, Timestamped):
 
     class Meta:
         abstract = True
+
+
+class SubqueryCount(models.Subquery):
+    template = "(SELECT count(id) FROM (%(subquery)s) _count)"
+    output_field = models.IntegerField()
+
+
+class SubquerySum(models.Subquery):
+    template = '(SELECT SUM(_agg."%(column)s") FROM (%(subquery)s) _agg)'
+
+    def __init__(self, queryset: models.QuerySet, column: str, **kwargs: dict) -> None:
+        super().__init__(queryset=queryset, output_field=models.IntegerField(), column=column, **kwargs)
 
 
 def only_one_or_zero_is_set(*fields: str) -> models.Q:

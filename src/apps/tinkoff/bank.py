@@ -13,7 +13,8 @@ from apps.tinkoff.exceptions import TinkoffRequestException
 
 
 class TinkoffBank(Bank):
-    acquiring_percent = Decimal("2.49")
+    default_acquiring_percent = Decimal("2.49")
+    default_currency_rate = Decimal(1)
     name = _("Tinkoff")
 
     @property
@@ -70,7 +71,7 @@ class TinkoffBank(Bank):
         parsed = response.json()
 
         if not parsed["Success"]:
-            raise TinkoffRequestException(f'Non-success request for {method}: {parsed["ErrorCode"]}, {parsed["Message"]} ({parsed["Details"]}')
+            raise TinkoffRequestException(f"Non-success request for {method}: {parsed['ErrorCode']}, {parsed['Message']} ({parsed['Details']}")
 
         return parsed
 

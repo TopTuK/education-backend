@@ -1,6 +1,7 @@
 import time
 from contextlib import nullcontext as does_not_raise
 from datetime import datetime
+from decimal import Decimal
 
 import pytest
 from django.contrib.admin.models import CHANGE, LogEntry
@@ -21,7 +22,12 @@ pytestmark = [
 
 
 @pytest.fixture(autouse=True)
-def _adjust_settings(settings):
+def _set_locale(settings):
+    settings.LANGUAGE_CODE = "en"
+
+
+@pytest.fixture(autouse=True)
+def _adjust_settings(settings, mocker):
     settings.BANKS_REFUNDS_ENABLED = True
     settings.ABSOLUTE_HOST = "http://absolute-url.url"
 
@@ -29,6 +35,8 @@ def _adjust_settings(settings):
         "first_refunds_watcher@mail.com",
         "second_refunds_watcher@mail.com",
     ]
+    mocker.patch("apps.stripebank.bank.StripeBankUSD.get_currency_rate", return_value=Decimal(80))
+    mocker.patch("apps.stripebank.bank.StripeBankKZT.get_currency_rate", return_value=Decimal("0.18"))
 
 
 @pytest.fixture
@@ -87,6 +95,11 @@ def mock_rebuild_tags(mocker):
 
 
 @pytest.fixture
+def _disable_refund_throttling(mocker):
+    mocker.patch("apps.orders.services.order_refunder.OrderRefunder.validate_throttling")
+
+
+@pytest.fixture
 def not_paid_order(course, factory, user):
     order = factory.order(
         user=user,
@@ -95,7 +108,7 @@ def not_paid_order(course, factory, user):
         bank_id="dolyame",  # any bank should be suitable here
     )
 
-    order.ship()
+    order.update(shipped=datetime.fromisoformat("2022-12-10 09:22Z"))  # set manualy to skip side effects
     return order
 
 
@@ -145,22 +158,6 @@ def test_1_per_10_seconds_limit(paid_tinkoff_order, refund):
         assert "Up to 1 refund per 10 seconds is allowed" in str(e)
 
 
-def test_refund_shipped_unpaid_order_for_non_zero_amount(not_paid_order, refund):
-    with pytest.raises(OrderRefunderException) as e:
-        refund(not_paid_order, 100)
-
-    not_paid_order.refresh_from_db()
-    assert "Only 0 can be refunded for not paid order" in str(e)
-    assert not_paid_order.shipped is not None
-
-
-def test_refund_shipped_unpaid_order(not_paid_order, refund):
-    refund(not_paid_order, 0)
-
-    not_paid_order.refresh_from_db()
-    assert not_paid_order.shipped is None
-
-
 def test_refund_negative_amount(paid_tinkoff_order, refund):
     with pytest.raises(OrderRefunderException) as e:
         refund(paid_tinkoff_order, -1)
@@ -193,7 +190,8 @@ def test_call_unshipper_to_unship(paid_order, refund, spy_unshipper):
 
 
 def test_do_not_call_bank_refund_if_order_unpaid(not_paid_order, refund, mock_dolyame_refund):
-    refund(not_paid_order, 0)
+    with pytest.raises(OrderRefunderException):
+        refund(not_paid_order, 0)
 
     mock_dolyame_refund.assert_not_called()
 
@@ -213,10 +211,11 @@ def test_do_not_break_and_not_try_call_bank_refund_if_bank_id_is_empty(paid_orde
         refund(paid_order, paid_order.price)
 
 
-def test_unship_order_despite_it_unpaid(not_paid_order, refund, spy_unshipper):
-    refund(not_paid_order, 0)
+def no_refunds_for_not_paid_orders(not_paid_order, refund, spy_unshipper):
+    with pytest.raises(OrderRefunderException):
+        refund(not_paid_order, 0)
 
-    spy_unshipper.assert_called_once()
+    spy_unshipper.assert_not_called()
 
 
 def test_order_refunded_all_refund_watchers_notified(paid_order, refund, send_mail, mocker):
@@ -245,6 +244,7 @@ def test_refund_notification_email_context_and_template_correct(refund, paid_ord
             payment_method_name=BANKS["dolyame"].name,
             price="0",
             amount="999",
+            is_full=True,
             order_admin_site_url=f"http://absolute-url.url/admin/orders/order/{paid_order.id}/change/",
         ),
     )
@@ -276,7 +276,7 @@ def test_update_user_tags(paid_order, mock_rebuild_tags, refund):
     mock_rebuild_tags.assert_called_once_with(student_id=paid_order.user.id)
 
 
-@pytest.mark.dashamail()
+@pytest.mark.dashamail
 def test_update_dashamail(paid_order, refund, mocker):
     update_subscription = mocker.patch("apps.dashamail.tasks.DashamailSubscriber.subscribe")
 
@@ -292,8 +292,8 @@ def test_fail_if_bank_is_set_but_unknown(paid_order, refund):
         refund(paid_order, paid_order.price)
 
 
-@pytest.mark.auditlog()
-@pytest.mark.freeze_time()
+@pytest.mark.auditlog
+@pytest.mark.freeze_time
 def test_success_admin_log_created(paid_order, refund, user):
     refund(paid_order, paid_order.price)
 
@@ -359,18 +359,17 @@ def test_partial_refund_order_not_unshipped(paid_tinkoff_order, refund, spy_unsh
     spy_unshipper.assert_not_called()
 
 
-@pytest.mark.usefixtures("mock_tinkoff_refund")
+@pytest.mark.usefixtures("mock_tinkoff_refund", "_disable_refund_throttling")
 def test_partial_refund_order_unshipped_when_total_refund_eq_price(paid_tinkoff_order, refund, spy_unshipper):
     refund(paid_tinkoff_order, 500)
-    time.sleep(10)
 
     refund(paid_tinkoff_order, 499)
 
     spy_unshipper.assert_called_once()
 
 
-@pytest.mark.auditlog()
-@pytest.mark.freeze_time()
+@pytest.mark.auditlog
+@pytest.mark.freeze_time
 @pytest.mark.usefixtures("mock_tinkoff_refund")
 def test_partial_refund_success_admin_log_created(paid_tinkoff_order, refund, user):
     refund(paid_tinkoff_order, 500)
@@ -400,6 +399,7 @@ def test_partial_refund_notification_email_context_and_template_correct(refund, 
             payment_method_name=BANKS["tinkoff_bank"].name,
             price="499",
             amount="500",
+            is_full=False,
             order_admin_site_url=f"http://absolute-url.url/admin/orders/order/{paid_tinkoff_order.id}/change/",
         ),
     )

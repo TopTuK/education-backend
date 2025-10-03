@@ -1,3 +1,4 @@
+import ssl
 from decimal import Decimal
 from urllib.parse import urljoin
 
@@ -6,6 +7,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from apps.banking.base import Bank
+from apps.banking.models import AcquiringPercent
 
 
 class DolyameRequestException(Exception):
@@ -18,7 +20,8 @@ class Dolyame(Bank):
     There is no 'commit' method: it's not required cause 'autocommit' is enabled on the bank side.
     """
 
-    acquiring_percent = Decimal("6.9")
+    default_acquiring_percent = Decimal("6.9")
+    default_currency_rate = Decimal(1)
     base_url = "https://partner.dolyame.ru/v1/"
     name = _("Dolyame")
     bank_id = "dolyame"
@@ -57,6 +60,9 @@ class Dolyame(Bank):
 
     def post(self, method: str, payload: dict) -> dict:
         """Query Dolyame API"""
+        ssl_context = ssl.create_default_context()
+        ssl_context.load_cert_chain(certfile=settings.DOLYAME_CERTIFICATE_PATH)
+
         response = httpx.post(
             url=urljoin(self.base_url, method),
             json=payload,
@@ -64,7 +70,7 @@ class Dolyame(Bank):
             headers={
                 "X-Correlation-ID": self.idempotency_key,
             },
-            cert=settings.DOLYAME_CERTIFICATE_PATH,
+            verify=ssl_context,
         )
 
         if response.status_code != 200:
@@ -101,3 +107,16 @@ class Dolyame(Bank):
     @staticmethod
     def get_notification_url() -> str:
         return urljoin(settings.ABSOLUTE_HOST, "/api/v2/banking/dolyame-notifications/")
+
+    def get_acquiring_percent(self) -> Decimal:
+        """Dynamic acquring percent based on order price"""
+        try:
+            big = AcquiringPercent.objects.get(slug="dolyame-big").percent
+            small = AcquiringPercent.objects.get(slug="dolyame-small").percent
+        except AcquiringPercent.DoesNotExist:
+            return super().get_acquiring_percent()
+
+        if self.order.price >= 30_000:
+            return big
+
+        return small

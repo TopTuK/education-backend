@@ -39,11 +39,7 @@ class MessageAdmin(ModelAdmin):
         ("chain", RelatedOnlyFieldListFilter),
     ]
 
-    list_select_related = [
-        "parent",
-        "chain",
-        "chain__course",
-    ]
+    list_select_related = ["parent", "chain__course"]
 
     @admin.display(description=_("Course"), ordering="chain__course")
     def course(self, obj: Message) -> str:

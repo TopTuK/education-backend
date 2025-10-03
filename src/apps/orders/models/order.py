@@ -41,9 +41,10 @@ class Order(TimestampedModel):
     slug = models.CharField(max_length=32, db_index=True, unique=True, default=shortuuid.uuid)
 
     author = models.ForeignKey("users.User", related_name="created_orders", verbose_name=_("Order author"), on_delete=models.PROTECT, editable=False)
-    user = models.ForeignKey("users.Student", verbose_name=_("User"), on_delete=models.PROTECT)
+    user = models.ForeignKey("users.AdminUserProxy", verbose_name=_("User"), on_delete=models.PROTECT)
     price = models.DecimalField(_("Price"), max_digits=9, decimal_places=2)
     promocode = models.ForeignKey("orders.PromoCode", verbose_name=_("Promo Code"), blank=True, null=True, on_delete=models.PROTECT)
+    deal = models.ForeignKey("b2b.Deal", related_name="orders", verbose_name=_("Deal"), blank=True, null=True, on_delete=models.PROTECT)
 
     paid = models.DateTimeField(
         _("Date when order got paid"),
@@ -53,17 +54,18 @@ class Order(TimestampedModel):
     shipped = models.DateTimeField(_("Date when order was shipped"), null=True, blank=True)
 
     bank_id = models.CharField(_("User-requested bank string"), choices=BANK_CHOICES, blank=True, max_length=32)
-    ue_rate = models.IntegerField(_("Purchase-time UE rate"))
-    acquiring_percent = models.DecimalField(default=0, max_digits=4, decimal_places=2)
+    ue_rate = models.DecimalField(_("Purchase-time UE rate"), decimal_places=2, max_digits=6, default=0)
+    acquiring_percent = models.DecimalField(_("Acquiring percent"), max_digits=4, decimal_places=2, default=0)
 
     course = ItemField(to="products.Course", verbose_name=_("Course"), null=True, blank=True, on_delete=models.PROTECT)
-    record = ItemField(to="products.Record", verbose_name=_("Record"), null=True, blank=True, on_delete=models.PROTECT)
-    bundle = ItemField(to="products.Bundle", verbose_name=_("Bundle"), null=True, blank=True, on_delete=models.PROTECT)
+    record = ItemField(to="products.LegacyRecord", verbose_name=_("Record"), null=True, blank=True, on_delete=models.PROTECT)
+    bundle = ItemField(to="products.LegacyBundle", verbose_name=_("Bundle"), null=True, blank=True, on_delete=models.PROTECT)
 
     amocrm_lead = models.OneToOneField("amocrm.AmoCRMOrderLead", on_delete=models.SET_NULL, null=True, blank=True, related_name="order")
     amocrm_transaction = models.OneToOneField("amocrm.AmoCRMOrderTransaction", on_delete=models.SET_NULL, null=True, blank=True, related_name="order")
 
     analytics = models.JSONField(default=dict)
+    raw = models.JSONField(default=dict)
 
     class Meta:
         ordering = ["-id"]
@@ -132,7 +134,7 @@ class Order(TimestampedModel):
 
         OrderPaidSetter(self, silent=silent)()
 
-    def refund(self, amount: Decimal) -> None:
+    def refund(self, amount: Decimal | None = None) -> None:
         from apps.orders.services import OrderRefunder
 
         OrderRefunder(self, amount)()

@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 from django.utils.translation import gettext_lazy as _
 
 from apps.diplomas.models import Diploma, DiplomaStudyProxy, Languages
+from apps.products.admin.filters import CourseFilter
 from apps.studying.models import Study
 from core.admin import ModelAdmin, admin
 from core.admin.filters import BooleanFilter
@@ -48,9 +49,9 @@ class StudyAdmin(ModelAdmin):
     fields = ("course", "student", "homework_accepted")
     inlines = (DiplomaInline,)
     list_display = ("course", "student")
-    list_filter = ("homework_accepted", RuDiplomaExistsFilter, EnDiplomaExistsFilter, "course")
+    list_filter = ("homework_accepted", RuDiplomaExistsFilter, EnDiplomaExistsFilter, CourseFilter)
     readonly_fields = ("course", "student")
-    search_fields = ("course__name", "student__email", "student__first_name", "student__last_name", "student__username")
+    search_fields = ("course__product_name", "student__email", "student__first_name", "student__last_name", "student__username")
 
     def has_add_permission(self, request: "HttpRequest") -> bool:
         """Study addition is disabled: the student is automatically enrolled in the course when the course is purchased.

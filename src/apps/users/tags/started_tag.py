@@ -7,7 +7,7 @@ from apps.products.models import Course
 from apps.users.tags.base import TagMechanism
 
 if TYPE_CHECKING:
-    from apps.users.models import Student
+    from apps.users.models import User
 
 
 @final
@@ -16,7 +16,7 @@ class StartedTag(TagMechanism):
         non_paid_courses = self.get_non_paid_courses(self.student)
         return [f"{slug}__started" for slug in self.generate_slugs(non_paid_courses)]
 
-    def get_non_paid_courses(self, student: "Student") -> QuerySet[Course]:
+    def get_non_paid_courses(self, student: "User") -> QuerySet[Course]:
         orders = self.get_student_orders(student)
         paid_orders = orders.filter(paid__isnull=False)
 
@@ -26,7 +26,7 @@ class StartedTag(TagMechanism):
 
         return Course.objects.filter(pk__in=started_courses.difference(purchased_courses)).exclude(group__in=groups_with_purchased_courses)
 
-    def generate_slugs(self, non_paid_courses: QuerySet[Course]) -> Generator[str, None, None]:
+    def generate_slugs(self, non_paid_courses: QuerySet[Course]) -> Generator[str]:
         for course in non_paid_courses:
             yield course.slug
 

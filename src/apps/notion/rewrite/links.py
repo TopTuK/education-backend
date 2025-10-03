@@ -1,9 +1,9 @@
 from functools import lru_cache
 from typing import Mapping
 
-from apps.notion.helpers import uuid_to_id
+from apps.notion.id import uuid_to_id
 from apps.notion.models import Material
-from apps.notion.types import BlockData, BlockId, TextProperty
+from apps.notion.types import BlockData, NotionId, TextProperty
 
 
 def rewrite_links(notion_block_data: BlockData) -> BlockData:
@@ -18,14 +18,14 @@ def rewrite_links(notion_block_data: BlockData) -> BlockData:
 
 
 @lru_cache
-def get_link_rewrite_mapping() -> Mapping[BlockId, BlockId]:
+def get_link_rewrite_mapping() -> Mapping[NotionId, NotionId]:
     """Returns a mapping Notion Material -> our slug"""
     mapping = Material.objects.all().values_list("page_id", "slug")
 
     return {page_id: uuid_to_id(str(slug)) for page_id, slug in mapping}
 
 
-def rewrite_prop(prop: TextProperty) -> TextProperty:  # NOQA: CCR001
+def rewrite_prop(prop: TextProperty) -> TextProperty:
     """Drill down notion property data, searching for a link to the internal material.
     If the link is found -- rewrite its id to our material slug
     """

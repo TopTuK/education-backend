@@ -1,15 +1,17 @@
+# ruff: noqa: S608, S611
 import contextlib
 import uuid
-from typing import Optional  # NOQA: I251
+from typing import Optional
 from urllib.parse import urljoin
 
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db.models import Q, QuerySet, UniqueConstraint
+from django.db.models.expressions import RawSQL
 from django.utils.translation import gettext_lazy as _
 
-from apps.notion.helpers import uuid_to_id
+from apps.notion.id import uuid_to_id
 from apps.users.models import User
 from core.models import TimestampedModel, models
 
@@ -19,12 +21,33 @@ class MaterialQuerySet(QuerySet):
         return self.filter(active=True)
 
     def for_student(self, student: User) -> QuerySet["Material"]:
-        available_courses = apps.get_model("studying.Study").objects.filter(student=student).values("course")
+        available_course_ids = list(apps.get_model("studying.Study").objects.filter(student=student).values_list("course", flat=True))
 
-        materials_from_available_courses = Material.objects.filter(active=True, course__in=available_courses)
+        if len(available_course_ids) == 0:
+            return Material.objects.none()
 
-        return Material.objects.filter(  # add materials with same page_ids but belonging to another courses
-            page_id__in=materials_from_available_courses.values("page_id"),
+        # Didn't want to use django-tree-queries as we do in the homework app, cuz after time
+        # i see no value in it over raw SQL
+
+        return Material.objects.filter(  # this query cost me $1.56
+            page_id__in=RawSQL(
+                f"""
+                WITH RECURSIVE accessible_pages AS (
+                    -- Base case: directly accessible page IDs from available courses
+                    SELECT page_id FROM {apps.get_model("notion.material")._meta.db_table}
+                    WHERE active = TRUE AND course_id = ANY(%s)
+
+                    UNION
+
+                    -- Recursive case: child pages linked from any accessible page
+                    SELECT pl.destination
+                    FROM {apps.get_model("notion.PageLink")._meta.db_table} pl
+                    JOIN accessible_pages ap ON pl.source = ap.page_id
+                )
+                SELECT page_id FROM accessible_pages
+            """,
+                [available_course_ids],
+            )
         )
 
     def get_by_page_id_or_slug(self, page_id_or_slug: str) -> Optional["Material"]:
@@ -67,3 +90,6 @@ class Material(TimestampedModel):
 
     def get_notion_url(self) -> str:
         return f"https://notion.so/1-{self.page_id}"
+
+    def get_short_slug(self) -> str:
+        return uuid_to_id(str(self.slug))
